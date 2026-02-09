@@ -75,16 +75,15 @@ export default function Sidebar({ profile }: SidebarProps) {
     const navItems = getNavItems();
 
     return (
-        <aside className="w-64 bg-gradient-to-b from-gray-900 to-gray-800 text-white flex flex-col">
-            {/* Logo */}
-            <div className="p-6 border-b border-gray-700">
+        <aside className="w-64 bg-gray-900 text-white flex flex-col h-screen">
+            <div className="p-6 border-b border-gray-800">
                 <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center">
+                    <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
                         <span className="text-lg font-bold">PM</span>
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold">PayMang</h1>
-                        <p className="text-xs text-gray-400 capitalize">{profile.role}</p>
+                        <h1 className="text-xl font-semibold">PayMang</h1>
+                        <p className="text-xs text-gray-400">Gestión de comisiones</p>
                     </div>
                 </div>
             </div>
@@ -100,12 +99,12 @@ export default function Sidebar({ profile }: SidebarProps) {
                             key={item.href}
                             href={item.href}
                             className={`
-                flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200
-                ${isActive
-                                    ? 'bg-white/10 text-white shadow-lg'
-                                    : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                                flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors duration-200
+                                ${isActive
+                                    ? 'bg-gray-700 text-white'
+                                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                                 }
-              `}
+                            `}
                         >
                             <Icon size={20} />
                             <span className="font-medium">{item.label}</span>
@@ -115,19 +114,29 @@ export default function Sidebar({ profile }: SidebarProps) {
             </nav>
 
             {/* User Info & Logout */}
-            <div className="p-4 border-t border-gray-700 space-y-3">
-                <div className="px-4 py-2">
-                    <p className="text-sm font-medium truncate">{profile.full_name}</p>
-                    <p className="text-xs text-gray-400 truncate">{profile.email}</p>
+            <div className="p-4 border-t border-gray-800">
+                <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                        <div className="w-9 h-9 bg-primary-600 rounded-lg flex items-center justify-center">
+                            <span className="text-sm font-semibold">
+                                {profile.full_name?.charAt(0) || profile.email.charAt(0)}
+                            </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">
+                                {profile.full_name || 'Usuario'}
+                            </p>
+                            <p className="text-xs text-gray-400 capitalize">{profile.role}</p>
+                        </div>
+                    </div>
                 </div>
-                <Button
+                <button
                     onClick={handleLogout}
-                    variant="ghost"
-                    className="w-full justify-start text-gray-300 hover:text-white hover:bg-white/5 rounded-lg"
+                    className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-300 hover:text-white text-sm font-medium transition-colors"
                 >
-                    <LogOut size={20} className="mr-3" />
-                    Cerrar Sesión
-                </Button>
+                    <LogOut className="w-4 h-4" />
+                    <span>Cerrar sesión</span>
+                </button>
             </div>
         </aside>
     );

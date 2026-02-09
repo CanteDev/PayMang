@@ -4,16 +4,16 @@
 
 @layer base {
   :root {
-    --background: 248 249 250;
-    /* #F8F9FA */
+    --background: 249 250 251;
+    /* gray-50 */
     --foreground: 17 24 39;
     /* gray-900 */
     --card: 255 255 255;
     --card-foreground: 17 24 39;
     --popover: 255 255 255;
     --popover-foreground: 17 24 39;
-    --primary: 46 144 250;
-    /* #2E90FA */
+    --primary: 51 78 104;
+    /* primary-700 */
     --primary-foreground: 255 255 255;
     --secondary: 243 244 246;
     --secondary-foreground: 17 24 39;
@@ -25,7 +25,7 @@
     --destructive-foreground: 255 255 255;
     --border: 229 231 235;
     --input: 229 231 235;
-    --ring: 46 144 250;
+    --ring: 51 78 104;
     --radius: 0.5rem;
   }
 }
@@ -36,7 +36,7 @@
   }
 
   body {
-    background-color: #F8F9FA;
+    background-color: #F5F7FA;
     color: hsl(var(--foreground));
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
