@@ -1,119 +1,111 @@
 import { createClient } from '@/lib/supabase/server';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { DollarSign, Users, TrendingUp, AlertCircle } from 'lucide-react';
+import { redirect } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DollarSign, Users, TrendingUp, AlertTriangle } from 'lucide-react';
+import UnifiedLinkGenerator from '@/components/admin/UnifiedLinkGenerator';
+import CommissionTable from '@/components/dashboard/CommissionTable';
 
 export default async function AdminDashboard() {
     const supabase = await createClient();
 
-    // KPIs básicos (placeholder - se implementarán queries reales)
-    const stats = {
-        totalRevenue: 45670.50,
-        pendingCommissions: 3200.75,
-        activeStudents: 48,
-        openIncidences: 2,
-    };
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+        redirect('/login');
+    }
+
+    // Obtener KPIs básicos
+    const { count: totalSales } = await supabase
+        .from('sales')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'paid');
+
+    const { data: pendingCommissions } = await supabase
+        .from('commissions')
+        .select('amount')
+        .eq('status', 'pending');
+
+    const pendingTotal = pendingCommissions?.reduce((sum, c) => sum + c.amount, 0) || 0;
+
+    const { count: activeStudents } = await supabase
+        .from('students')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
+
+    const { count: openIncidences } = await supabase
+        .from('commissions')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'incidence');
 
     return (
         <div className="space-y-8">
-            {/* Header */}
             <div>
-                <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-                <p className="text-gray-600 mt-1">Visión general del negocio</p>
+                <h1 className="text-3xl font-semibold text-gray-900">Dashboard Admin</h1>
+                <p className="text-gray-600 mt-1">Gestiona ventas, comisiones y equipo</p>
             </div>
 
-            {/* KPI Cards */}
+            {/* KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card className="rounded-2xl border-gray-200 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium text-gray-600">
-                            Facturación Total
+                            Total Ventas
                         </CardTitle>
-                        <DollarSign className="h-5 w-5 text-green-600" />
+                        <DollarSign className="w-4 h-4 text-gray-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold text-gray-900">
-                            €{stats.totalRevenue.toFixed(2)}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                            +12.5% vs mes anterior
-                        </p>
+                        <div className="text-2xl font-bold text-gray-900">{totalSales || 0}</div>
+                        <p className="text-xs text-gray-500 mt-1">Ventas completadas</p>
                     </CardContent>
                 </Card>
 
-                <Card className="rounded-2xl border-gray-200 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium text-gray-600">
                             Comisiones Pendientes
                         </CardTitle>
-                        <TrendingUp className="h-5 w-5 text-orange-600" />
+                        <TrendingUp className="w-4 h-4 text-gray-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold text-gray-900">
-                            €{stats.pendingCommissions.toFixed(2)}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                            Por validar y pagar
-                        </p>
+                        <div className="text-2xl font-bold text-amber-600">{pendingTotal.toFixed(2)}€</div>
+                        <p className="text-xs text-gray-500 mt-1">Por pagar</p>
                     </CardContent>
                 </Card>
 
-                <Card className="rounded-2xl border-gray-200 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium text-gray-600">
                             Alumnos Activos
                         </CardTitle>
-                        <Users className="h-5 w-5 text-blue-600" />
+                        <Users className="w-4 h-4 text-gray-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold text-gray-900">
-                            {stats.activeStudents}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                            +5 este mes
-                        </p>
+                        <div className="text-2xl font-bold text-gray-900">{activeStudents || 0}</div>
+                        <p className="text-xs text-gray-500 mt-1">En programa</p>
                     </CardContent>
                 </Card>
 
-                <Card className="rounded-2xl border-gray-200 shadow-md hover:shadow-lg transition-shadow duration-300">
+                <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium text-gray-600">
                             Incidencias Abiertas
                         </CardTitle>
-                        <AlertCircle className="h-5 w-5 text-red-600" />
+                        <AlertTriangle className="w-4 h-4 text-gray-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold text-gray-900">
-                            {stats.openIncidences}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                            Requieren atención
-                        </p>
+                        <div className="text-2xl font-bold text-red-600">{openIncidences || 0}</div>
+                        <p className="text-xs text-gray-500 mt-1">Requieren atención</p>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Placeholder para gráficos */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="rounded-2xl border-gray-200 shadow-md">
-                    <CardHeader>
-                        <CardTitle>Cash Flow Proyectado</CardTitle>
-                        <CardDescription>Ingresos vs Gastos - Próximos 6 meses</CardDescription>
-                    </CardHeader>
-                    <CardContent className="h-64 flex items-center justify-center text-gray-400">
-                        Gráfico de Cash Flow (Recharts)
-                    </CardContent>
-                </Card>
+            {/* Generador de Links */}
+            <UnifiedLinkGenerator />
 
-                <Card className="rounded-2xl border-gray-200 shadow-md">
-                    <CardHeader>
-                        <CardTitle>Ventas Recientes</CardTitle>
-                        <CardDescription>Últimas transacciones registradas</CardDescription>
-                    </CardHeader>
-                    <CardContent className="h-64 flex items-center justify-center text-gray-400">
-                        Tabla de ventas recientes
-                    </CardContent>
-                </Card>
-            </div>
+            {/* Tabla de Comisiones */}
+            <CommissionTable userRole="admin" />
         </div>
     );
 }
