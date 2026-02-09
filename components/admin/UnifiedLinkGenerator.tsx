@@ -44,9 +44,12 @@ export default function UnifiedLinkGenerator() {
     const [selectedSetter, setSelectedSetter] = useState<string>('');
 
     const [generatedLink, setGeneratedLink] = useState<string>('');
+    const [generatedLinkId, setGeneratedLinkId] = useState<string>('');
     const [copied, setCopied] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [simulatingPayment, setSimulatingPayment] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
 
     const [availableGateways, setAvailableGateways] = useState<string[]>([]);
     const [assignedCoach, setAssignedCoach] = useState<string>('');
@@ -181,6 +184,45 @@ export default function UnifiedLinkGenerator() {
         navigator.clipboard.writeText(generatedLink);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleSimulatePayment = async () => {
+        if (!generatedLinkId) return;
+
+        setSimulatingPayment(true);
+        setError(null);
+        setSuccess(null);
+
+        try {
+            const response = await fetch('/api/test/simulate-payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ linkId: generatedLinkId }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Error simulando pago');
+            }
+
+            setSuccess(`✅ ${data.message}`);
+            setGeneratedLink('');
+            setGeneratedLinkId('');
+
+            // Recargar la página después de 2 segundos para ver las comisiones
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+
+        } catch (err: any) {
+            console.error('Error simulando pago:', err);
+            setError(err.message || 'Error al simular el pago');
+        } finally {
+            setSimulatingPayment(false);
+        }
     };
 
     return (
@@ -319,6 +361,13 @@ export default function UnifiedLinkGenerator() {
                     {loading ? 'Generando...' : 'Generar Link de Pago'}
                 </Button>
 
+                {/* Success message */}
+                {success && (
+                    <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+                        {success}
+                    </div>
+                )}
+
                 {/* Link generado */}
                 {generatedLink && (
                     <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg space-y-3">
@@ -349,6 +398,24 @@ export default function UnifiedLinkGenerator() {
                                     </>
                                 )}
                             </Button>
+                        </div>
+
+                        {/* Botón de simulación */}
+                        <div className="pt-3 border-t border-green-300">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-medium text-green-900">🧪 Modo de Prueba</p>
+                                    <p className="text-xs text-green-700">Simula un pago exitoso sin API keys</p>
+                                </div>
+                                <Button
+                                    onClick={handleSimulatePayment}
+                                    disabled={simulatingPayment}
+                                    size="sm"
+                                    variant="default"
+                                >
+                                    {simulatingPayment ? 'Procesando...' : '🎯 Simular Pago'}
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 )}
