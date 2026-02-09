@@ -159,6 +159,7 @@ export default function UnifiedLinkGenerator() {
 
             const link = `${CONFIG.APP.URL}/p/${shortCode}`;
             setGeneratedLink(link);
+            setGeneratedLinkId(shortCode); // Guardar el ID para simular pago
 
             // Reset form
             setSelectedStudent('');
