@@ -9,7 +9,7 @@ Para configurar el proyecto PayMang con Supabase, sigue estos pasos:
 3. Haz clic en "New Project"
 4. Completa:
    - **Name**: PayMang Dev (o el nombre que prefieras)
-   - **Database Password**: Guarda esta contraseña de forma segura
+   - **Database Password**: Guarda esta contraseña de forma segura (PrimaveraVerano.01)
    - **Region**: Elige la más cercana a tus usuarios
    - **Pricing Plan**: Free (para desarrollo)
 

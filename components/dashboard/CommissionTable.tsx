@@ -127,7 +127,7 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
 
     const getStatusBadge = (status: string) => {
         const styles = {
-            pending: 'bg-amber-100 text-amber-700 border-amber-200',
+            pending: 'bg-blue-100 text-blue-700 border-blue-200',
             incidence: 'bg-red-100 text-red-700 border-red-200',
             validated: 'bg-blue-100 text-blue-700 border-blue-200',
             paid: 'bg-green-100 text-green-700 border-green-200',
@@ -182,7 +182,7 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
                         </div>
                         <div className="text-sm">
                             <span className="text-gray-600">Pendiente: </span>
-                            <span className="font-semibold text-amber-600">{pendingAmount.toFixed(2)}€</span>
+                            <span className="font-semibold text-blue-600">{pendingAmount.toFixed(2)}€</span>
                         </div>
                     </div>
                 </div>

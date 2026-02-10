@@ -54,7 +54,8 @@ export async function POST(request: NextRequest) {
             .insert({
                 student_id: link.student_id,
                 pack_id: link.pack_id,
-                amount: totalAmount,
+                total_amount: totalAmount,
+                amount_collected: totalAmount,
                 gateway: link.gateway,
                 transaction_id: `TEST_${Date.now()}_${linkId}`,
                 status: 'paid',
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
         if (saleError) {
             console.error('Error creando venta simulada:', saleError);
             return NextResponse.json(
-                { error: 'Error creando venta' },
+                { error: `Error creando venta: ${saleError.message}`, details: saleError },
                 { status: 500 }
             );
         }
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
             commissions.push({
                 sale_id: sale.id,
                 agent_id: coach_id,
-                agent_role: 'coach',
+                role_at_sale: 'coach',
                 amount: Math.round(totalAmount * CONFIG.COMMISSION_RATES.COACH * 100) / 100,
                 status: 'pending',
                 milestone: 1,
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
             commissions.push({
                 sale_id: sale.id,
                 agent_id: closer_id,
-                agent_role: 'closer',
+                role_at_sale: 'closer',
                 amount: Math.round(totalAmount * CONFIG.COMMISSION_RATES.CLOSER * 100) / 100,
                 status: 'pending',
                 milestone: 1,
@@ -112,7 +113,7 @@ export async function POST(request: NextRequest) {
             commissions.push({
                 sale_id: sale.id,
                 agent_id: setter_id,
-                agent_role: 'setter',
+                role_at_sale: 'setter',
                 amount: Math.round(totalAmount * CONFIG.COMMISSION_RATES.SETTER * 100) / 100,
                 status: 'pending',
                 milestone: 1,
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
         if (commissionError) {
             console.error('Error creando comisiones:', commissionError);
             return NextResponse.json(
-                { error: 'Error creando comisiones' },
+                { error: `Error creando comisiones: ${commissionError.message}`, details: commissionError },
                 { status: 500 }
             );
         }

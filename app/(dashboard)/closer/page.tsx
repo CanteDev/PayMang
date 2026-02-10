@@ -59,7 +59,7 @@ export default async function CloserDashboard() {
                         <TrendingUp className="w-4 h-4 text-gray-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-amber-600">{pending.toFixed(2)}€</div>
+                        <div className="text-2xl font-bold text-blue-600">{pending.toFixed(2)}€</div>
                         <p className="text-xs text-gray-500 mt-1">En proceso</p>
                     </CardContent>
                 </Card>

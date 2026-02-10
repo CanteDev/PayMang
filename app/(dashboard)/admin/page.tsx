@@ -69,7 +69,7 @@ export default async function AdminDashboard() {
                         <TrendingUp className="w-4 h-4 text-gray-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-amber-600">{pendingTotal.toFixed(2)}€</div>
+                        <div className="text-2xl font-bold text-blue-600">{pendingTotal.toFixed(2)}€</div>
                         <p className="text-xs text-gray-500 mt-1">Por pagar</p>
                     </CardContent>
                 </Card>

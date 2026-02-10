@@ -47,10 +47,35 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
     }
 
-    // Si hay usuario y está en login, redirigir al dashboard
+    // Si hay usuario y está en login, redirigir al dashboard según rol
     if (user && request.nextUrl.pathname === '/login') {
+        // Obtener el perfil del usuario para conocer su rol
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+
         const url = request.nextUrl.clone();
-        url.pathname = '/admin'; // Cambiar según el rol más adelante
+
+        // Redirigir según el rol
+        switch (profile?.role) {
+            case 'admin':
+                url.pathname = '/admin';
+                break;
+            case 'coach':
+                url.pathname = '/coach';
+                break;
+            case 'closer':
+                url.pathname = '/closer';
+                break;
+            case 'setter':
+                url.pathname = '/setter';
+                break;
+            default:
+                url.pathname = '/login';
+        }
+
         return NextResponse.redirect(url);
     }
 

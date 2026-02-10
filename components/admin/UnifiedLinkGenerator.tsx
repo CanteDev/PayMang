@@ -7,14 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Copy, CheckCircle2, Send } from 'lucide-react';
+import { Copy, CheckCircle2, Send, UserPlus } from 'lucide-react';
 import { CONFIG } from '@/config/app.config';
+import StudentForm from '@/components/admin/StudentForm';
 
 interface Student {
     id: string;
     email: string;
     full_name: string;
     assigned_coach_id: string | null;
+    closer_id: string | null;
 }
 
 interface Pack {
@@ -105,9 +107,25 @@ export default function UnifiedLinkGenerator() {
     useEffect(() => {
         if (selectedStudent) {
             const student = students.find(s => s.id === selectedStudent);
-            if (student?.assigned_coach_id) {
-                setAssignedCoach(student.assigned_coach_id);
+            if (student) {
+                // Autocompletar coach si está asignado
+                if (student.assigned_coach_id) {
+                    setAssignedCoach(student.assigned_coach_id);
+                } else {
+                    setAssignedCoach('');
+                }
+
+                // Autocompletar closer si está asignado
+                if (student.closer_id) {
+                    setSelectedCloser(student.closer_id);
+                } else {
+                    setSelectedCloser('');
+                }
             }
+        } else {
+            // Reset cuando no hay estudiante seleccionado
+            setAssignedCoach('');
+            setSelectedCloser('');
         }
     }, [selectedStudent, students]);
 
@@ -237,20 +255,35 @@ export default function UnifiedLinkGenerator() {
                 {/* Student */}
                 <div className="space-y-2">
                     <Label htmlFor="student">Estudiante *</Label>
-                    <select
-                        id="student"
-                        value={selectedStudent}
-                        onChange={(e) => setSelectedStudent(e.target.value)}
-                        className="w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
-                        disabled={loading}
-                    >
-                        <option value="">Seleccionar estudiante...</option>
-                        {students.map(student => (
-                            <option key={student.id} value={student.id}>
-                                {student.email} - {student.full_name}
-                            </option>
-                        ))}
-                    </select>
+                    <div className="flex gap-2">
+                        <select
+                            id="student"
+                            value={selectedStudent}
+                            onChange={(e) => setSelectedStudent(e.target.value)}
+                            className="w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
+                            disabled={loading}
+                        >
+                            <option value="">Seleccionar estudiante...</option>
+                            {students.map(student => (
+                                <option key={student.id} value={student.id}>
+                                    {student.email} - {student.full_name}
+                                </option>
+                            ))}
+                        </select>
+                        <StudentForm
+                            onSuccess={(newStudent) => {
+                                if (newStudent) {
+                                    setStudents(prev => [...prev, newStudent].sort((a, b) => a.email.localeCompare(b.email)));
+                                    setSelectedStudent(newStudent.id);
+                                }
+                            }}
+                            trigger={
+                                <Button id="open-new-student-modal" size="icon" variant="outline" type="button" title="Nuevo Alumno">
+                                    <UserPlus className="w-4 h-4" />
+                                </Button>
+                            }
+                        />
+                    </div>
                 </div>
 
                 {/* Pack */}
@@ -290,7 +323,7 @@ export default function UnifiedLinkGenerator() {
                         ))}
                     </select>
                     {selectedPack && availableGateways.length === 0 && (
-                        <p className="text-xs text-amber-600">
+                        <p className="text-xs text-orange-600">
                             Este pack no tiene pasarelas configuradas
                         </p>
                     )}

@@ -32,12 +32,18 @@ export const CONFIG = {
     // URLs de pasarelas (configurables por entorno)
     GATEWAYS: {
         STRIPE: {
+            PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '',
             API_KEY: process.env.STRIPE_SECRET_KEY || '',
             WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
         },
         HOTMART: {
             API_KEY: process.env.HOTMART_API_KEY || '',
+            CLIENT_ID: process.env.HOTMART_CLIENT_ID || '',
+            CLIENT_SECRET: process.env.HOTMART_CLIENT_SECRET || '',
+            BASIC_AUTH: process.env.HOTMART_BASIC || '',
             WEBHOOK_SECRET: process.env.HOTMART_WEBHOOK_SECRET || '',
+            API_URL: process.env.HOTMART_API_URL || 'https://developers.hotmart.com/payments/api/v1', // Default to production, override for sandbox
+            AUTH_URL: process.env.HOTMART_AUTH_URL || 'https://api-sec-vlc.hotmart.com/security/oauth/token',
         },
         SEQURA: {
             MERCHANT_ID: process.env.SEQURA_MERCHANT_ID || '',
