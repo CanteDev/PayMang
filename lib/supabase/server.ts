@@ -7,11 +7,18 @@ import type { Database } from '@/types/database';
  * Cliente de Supabase para uso en Server Components y Server Actions
  */
 export async function createClient() {
+    const supabaseUrl = CONFIG.SUPABASE.URL;
+    const supabaseAnonKey = CONFIG.SUPABASE.ANON_KEY;
+
+    // Use empty/mock values if missing during build
+    const url = supabaseUrl || 'https://placeholder-project.supabase.co';
+    const key = supabaseAnonKey || 'placeholder-key';
+
     const cookieStore = await cookies();
 
     return createServerClient<Database>(
-        CONFIG.SUPABASE.URL,
-        CONFIG.SUPABASE.ANON_KEY,
+        url,
+        key,
         {
             cookies: {
                 getAll() {
