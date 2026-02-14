@@ -57,7 +57,7 @@ export default function LoginPage() {
 
                 // Redirigir según el rol
                 if (profile && typeof profile === 'object' && 'role' in profile) {
-                    const userRole = profile.role as string;
+                    const userRole = (profile as any).role as string;
                     console.log('🚀 Redirigiendo a:', `/${userRole}`);
 
                     switch (userRole) {
