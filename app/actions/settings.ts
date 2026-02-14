@@ -31,8 +31,8 @@ export async function updateSetting(key: string, value: any) {
     if (!user) throw new Error('Usuario no autenticado');
 
     // Update
-    const { error } = await supabase
-        .from('app_settings')
+    const { error } = await (supabase
+        .from('app_settings') as any)
         .update({
             value: value,
             updated_at: new Date().toISOString()

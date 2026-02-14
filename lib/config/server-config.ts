@@ -42,8 +42,9 @@ export async function getAppConfig(key: string, defaultValue?: any): Promise<any
             .single();
 
         if (data) {
-            settingsCache[key] = { value: data.value, expires: now + CACHE_TTL };
-            return data.value;
+            const safeData = data as any;
+            settingsCache[key] = { value: safeData.value, expires: now + CACHE_TTL };
+            return safeData.value;
         }
 
     } catch (e) {

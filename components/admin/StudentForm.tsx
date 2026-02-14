@@ -110,8 +110,8 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
 
             if (student?.id) {
                 // Actualizar estudiante existente
-                const { data, error: updateError } = await supabase
-                    .from('students')
+                const { data, error: updateError } = await (supabase
+                    .from('students') as any)
                     .update(studentData as any)
                     .eq('id', student.id)
                     .select()
@@ -121,8 +121,8 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                 resultStudent = data;
             } else {
                 // Crear nuevo estudiante
-                const { data, error: insertError } = await supabase
-                    .from('students')
+                const { data, error: insertError } = await (supabase
+                    .from('students') as any)
                     .insert(studentData as any)
                     .select()
                     .single();

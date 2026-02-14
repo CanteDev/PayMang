@@ -208,7 +208,7 @@ export async function getStaffCommissionStats(userId?: string) {
 
     if (error) {
         console.error('Error fetching staff stats:', error);
-        return { commissions: [], summary: { generated: 0, received: 0, remaining: 0 } };
+        return { commissions: [], summary: { generatedThisMonth: 0, received: 0, remaining: 0 } };
     }
 
     const now = new Date();

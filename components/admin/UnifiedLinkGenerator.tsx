@@ -187,8 +187,8 @@ export default function UnifiedLinkGenerator() {
             // Si el estudiante no tenía coach asignado y seleccionamos uno ahora, lo asignamos
             const student = students.find(s => s.id === selectedStudent);
             if (student && !student.assigned_coach_id && assignedCoach) {
-                const { error: updateError } = await supabase
-                    .from('students')
+                const { error: updateError } = await (supabase
+                    .from('students') as any)
                     .update({ assigned_coach_id: assignedCoach } as any)
                     .eq('id', selectedStudent);
 
@@ -212,8 +212,8 @@ export default function UnifiedLinkGenerator() {
 
             const shortCode = nanoid(8);
 
-            const { error: insertError } = await supabase
-                .from('payment_links')
+            const { error: insertError } = await (supabase
+                .from('payment_links') as any)
                 .insert({
                     id: shortCode,
                     student_id: selectedStudent,

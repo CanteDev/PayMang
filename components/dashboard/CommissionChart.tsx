@@ -57,7 +57,7 @@ export default function CommissionChart({ data }: CommissionChartProps) {
                                 tickFormatter={(value) => `${value}€`}
                             />
                             <Tooltip
-                                formatter={(value: number) => [`${value.toFixed(2)}€`, 'Amount']}
+                                formatter={(value: any) => [`${Number(value).toFixed(2)}€`, 'Amount']}
                                 cursor={{ fill: 'transparent' }}
                             />
                             <Legend />

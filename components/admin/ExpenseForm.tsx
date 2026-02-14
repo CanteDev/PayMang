@@ -50,13 +50,15 @@ export default function ExpenseForm({ onSuccess }: ExpenseFormProps) {
             // Redondear a 2 decimales
             const roundedAmount = Math.round(amountNum * 100) / 100;
 
-            const { error: insertError } = await supabase
-                .from('expenses')
+            const { error: insertError } = await (supabase
+                .from('expenses') as any)
                 .insert({
-                    description: description.trim(),
+                    concept: description.trim(),
                     category: category.trim(),
                     amount: roundedAmount,
-                    expense_date: expenseDate,
+                    start_date: expenseDate,
+                    type: 'variable',
+                    recurring: false,
                 });
 
             if (insertError) throw insertError;

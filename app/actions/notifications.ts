@@ -24,7 +24,7 @@ export async function getUnreadCount() {
         console.error('Error fetching unread count:', error);
         return 0;
     }
-    return count || 0;
+    return (count as any) || 0;
 }
 
 export async function getNotifications(limit = 20) {
@@ -39,13 +39,13 @@ export async function getNotifications(limit = 20) {
         console.error('Error fetching notifications:', error);
         return [];
     }
-    return data as Notification[];
+    return (data || []) as Notification[];
 }
 
 export async function markAsRead(id: string) {
     const supabase = await createClient();
-    const { error } = await supabase
-        .from('notifications')
+    const { error } = await (supabase
+        .from('notifications') as any)
         .update({ is_read: true })
         .eq('id', id);
 
@@ -61,8 +61,8 @@ export async function markAllAsRead() {
     const supabase = await createClient();
 
     // RLS handles user filtering, so just update all for current user
-    const { error } = await supabase
-        .from('notifications')
+    const { error } = await (supabase
+        .from('notifications') as any)
         .update({ is_read: true })
         .eq('is_read', false);
 

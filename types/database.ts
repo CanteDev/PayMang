@@ -116,6 +116,18 @@ export interface PaymentLink {
     updated_at: string;
 }
 
+export interface Notification {
+    id: string;
+    user_id: string;
+    title: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+    link: string | null;
+    is_read: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface AppSettings {
     key: string;
     value: any;
@@ -168,6 +180,11 @@ export interface Database {
                 Row: AppSettings;
                 Insert: Omit<AppSettings, 'updated_at'>;
                 Update: Partial<Omit<AppSettings, 'key'>>;
+            };
+            notifications: {
+                Row: Notification;
+                Insert: Omit<Notification, 'id' | 'created_at' | 'updated_at'>;
+                Update: Partial<Omit<Notification, 'id' | 'created_at' | 'updated_at'>>;
             };
         };
     };
