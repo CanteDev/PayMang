@@ -3,8 +3,18 @@ import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import { refundHotmartSale } from '@/lib/hotmart/checkout';
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+// Helper to get Stripe Client
+function getStripeClient() {
+    const apiKey = process.env.STRIPE_SECRET_KEY;
+    if (!apiKey) {
+        // Fallback or warning during build
+        console.warn('STRIPE_SECRET_KEY missing');
+        // We still need to return something to avoid breaking types, 
+        // but in runtime it will throw if used.
+        return new Stripe('sk_test_placeholder');
+    }
+    return new Stripe(apiKey);
+}
 
 // Helper to get Supabase Admin Client
 function getSupabaseAdmin() {
@@ -62,6 +72,7 @@ export async function POST(request: NextRequest) {
             // If ID starts with 'cs_', it's a Checkout Session. Retrieve the PaymentIntent.
             if (paymentIntentId && paymentIntentId.startsWith('cs_')) {
                 console.log(`Resolving PaymentIntent from Checkout Session: ${paymentIntentId}`);
+                const stripe = getStripeClient();
                 const session = await stripe.checkout.sessions.retrieve(paymentIntentId);
                 if (!session.payment_intent) {
                     return NextResponse.json({ error: 'Payment Intent not found for this session' }, { status: 400 });
@@ -69,6 +80,7 @@ export async function POST(request: NextRequest) {
                 paymentIntentId = session.payment_intent as string;
             }
 
+            const stripe = getStripeClient();
             await stripe.refunds.create({
                 payment_intent: paymentIntentId,
             });
