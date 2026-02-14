@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { CONFIG } from '@/config/app.config';
+import { createClient } from '@supabase/supabase-js';
+import { calculateCommission } from '@/lib/commissions/calculator';
 
 /**
  * 🧪 MODO DE PRUEBA
@@ -18,7 +18,18 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const supabase = await createClient();
+        // Usar Service Role Key para bypass RLS durante testing
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+        if (!serviceRoleKey) {
+            return NextResponse.json(
+                { error: 'Service Role Key no configurada' },
+                { status: 500 }
+            );
+        }
+
+        const supabase = createClient(supabaseUrl, serviceRoleKey);
 
         // 1. Buscar el payment_link
         const { data: link, error: linkError } = await supabase
@@ -84,37 +95,37 @@ export async function POST(request: NextRequest) {
         // 4. Crear comisiones automáticamente
         const commissions: any[] = [];
 
-        // Coach: 10%
+        // Coach
         if (coach_id) {
             commissions.push({
                 sale_id: sale.id,
                 agent_id: coach_id,
                 role_at_sale: 'coach',
-                amount: Math.round(totalAmount * CONFIG.COMMISSION_RATES.COACH * 100) / 100,
+                amount: await calculateCommission(totalAmount, 'coach'),
                 status: 'pending',
                 milestone: 1,
             });
         }
 
-        // Closer: 8%
+        // Closer
         if (closer_id) {
             commissions.push({
                 sale_id: sale.id,
                 agent_id: closer_id,
                 role_at_sale: 'closer',
-                amount: Math.round(totalAmount * CONFIG.COMMISSION_RATES.CLOSER * 100) / 100,
+                amount: await calculateCommission(totalAmount, 'closer'),
                 status: 'pending',
                 milestone: 1,
             });
         }
 
-        // Setter: 1% (opcional)
+        // Setter
         if (setter_id) {
             commissions.push({
                 sale_id: sale.id,
                 agent_id: setter_id,
                 role_at_sale: 'setter',
-                amount: Math.round(totalAmount * CONFIG.COMMISSION_RATES.SETTER * 100) / 100,
+                amount: await calculateCommission(totalAmount, 'setter'),
                 status: 'pending',
                 milestone: 1,
             });

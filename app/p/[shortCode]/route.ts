@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 import { CONFIG } from '@/config/app.config';
 import Stripe from 'stripe';
+import { PaymentLinkWithRelations } from '@/types/database';
 
-// Initialize Stripe client if API key is available
-const stripe = CONFIG.GATEWAYS.STRIPE.API_KEY
-    ? new Stripe(CONFIG.GATEWAYS.STRIPE.API_KEY, {
-        apiVersion: '2025-01-27.acacia',
-    })
-    : null;
+// Stripe initialized per-request in buildStripeUrl
 
 /**
  * Smart Redirect Handler
@@ -21,7 +17,16 @@ export async function GET(
     const { shortCode } = await params;
 
     try {
-        const supabase = await createClient();
+        // Usar Service Role Key para bypass RLS ya que es un acceso público
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+        if (!serviceRoleKey) {
+            console.error('Service Role Key missing');
+            return NextResponse.redirect(`${CONFIG.APP.URL}/error?message=internal_configuration_error`);
+        }
+
+        const supabase = createClient(supabaseUrl, serviceRoleKey);
 
         // 1. Buscar el payment_link
         const { data: link, error: linkError } = await supabase
@@ -31,13 +36,8 @@ export async function GET(
                 student:students(*),
                 pack:packs(*)
             `)
-            .eq('short_code', shortCode) // Changed from 'id' to 'short_code' based on previous context, verify schema if needed
-            // If table uses 'id' as short_code (nanoid), then 'id' is correct.
-            // Previous file used .eq('id', shortCode). Let's stick to that if that's the schema.
-            // Actually, checking previous context, the file said .eq('id', shortCode). 
-            // BUT usually shortCode is a specific column. Let's assume 'id' is the nanoid PK.
             .eq('id', shortCode)
-            .single();
+            .single() as { data: PaymentLinkWithRelations | null, error: any };
 
         if (linkError || !link) {
             console.error('Link lookup error:', linkError);
@@ -50,8 +50,8 @@ export async function GET(
 
         // 2. Actualizar estado del link a 'clicked'
         // Use RPC or Update
-        await supabase
-            .from('payment_links')
+        await (supabase
+            .from('payment_links') as any)
             .update({ status: 'clicked' })
             .eq('id', shortCode);
 
@@ -98,11 +98,19 @@ async function buildPaymentUrl(
     }
 }
 
+import { getGatewayConfig } from '@/lib/settings-helper';
+
 async function buildStripeUrl(student: any, pack: any, metadata: any): Promise<string | null> {
-    if (!stripe) {
+    const config = await getGatewayConfig('stripe');
+
+    if (!config.secret_key) {
         console.error('Stripe not configured');
         return null; // Return null to trigger error page
     }
+
+    const stripe = new Stripe(config.secret_key, {
+        apiVersion: '2026-01-28.clover', // Keep consistent
+    });
 
     try {
         const session = await stripe.checkout.sessions.create({
@@ -128,6 +136,7 @@ async function buildStripeUrl(student: any, pack: any, metadata: any): Promise<s
                 link_id: metadata.link_id,
                 student_id: student.id,
                 pack_id: pack.id,
+                agent_id: metadata.created_by, // Assuming similar to coach_id
                 coach_id: metadata.coach_id,
                 source: 'paymang_link'
             },
@@ -140,46 +149,38 @@ async function buildStripeUrl(student: any, pack: any, metadata: any): Promise<s
     }
 }
 
-function buildHotmartUrl(student: any, pack: any, metadata: any): string {
-    const hotmartOfferId = pack.gateway_ids?.hotmart || '';
+async function buildHotmartUrl(student: any, pack: any, metadata: any): Promise<string | null> {
+    // Get product code and offer ID from pack configuration
+    // Product ID should be the public code (e.g., L104393461L)
+    const productCode = pack.gateway_ids?.hotmart?.product_id;
+    const offerCode = pack.gateway_ids?.hotmart?.offer_id;
 
-    // If no specific offer ID, maybe fallback to a default one or error?
-    if (!hotmartOfferId) {
-        // Logic to handle missing offer ID. 
-        // For sandbox testing, we might want a default test offer?
-        console.warn('No Hotmart offer ID found. Using fallback or error.');
-        // return `${CONFIG.APP.URL}/error?message=hotmart_not_configured`;
+    if (!productCode || !offerCode) {
+        console.error('Hotmart product/offer code not configured for pack:', pack.id);
+        return `${CONFIG.APP.URL}/error?message=hotmart_not_configured`;
     }
 
-    // Example Hotmart Pay URL: https://pay.hotmart.com/OFFER_CODE
-    const baseUrl = `https://pay.hotmart.com/${hotmartOfferId}`;
+    // Correct URL structure discovered: https://pay.hotmart.com/{PRODUCT_CODE}?off={OFFER_CODE}
+    const baseUrl = `https://pay.hotmart.com/${productCode}`;
+
+    console.log(`🔗 Generando link Hotmart para Product: ${productCode}, Offer: ${offerCode}`);
+
     const params = new URLSearchParams({
+        off: offerCode,
+        checkoutMode: '10',
         email: student.email,
         name: student.full_name || student.email,
         src: metadata.link_id,
-        // 'off' parameter can be used for coupons
-        // 'checkoutMode' for different appearances
+        sck: metadata.link_id
     });
 
-    return `${baseUrl}?${params.toString()}`;
+    const finalUrl = `${baseUrl}?${params.toString()}`;
+    console.log(`👉 URL Final Hotmart: ${finalUrl}`);
+
+    return finalUrl;
 }
 
 function buildSeQuraUrl(student: any, pack: any, metadata: any): string {
-    const merchantId = CONFIG.GATEWAYS.SEQURA.MERCHANT_ID;
-
-    if (!merchantId) {
-        return `${CONFIG.APP.URL}/error?message=sequra_not_configured`;
-    }
-
-    // SeQura integration usually involves a JS widget or a specific redirect.
-    // Assuming a redirect for this implementation context.
-    const params = new URLSearchParams({
-        merchant: merchantId,
-        amount: Math.round(pack.price * 100).toString(),
-        email: student.email,
-        item: pack.name,
-        ref: metadata.link_id
-    });
-
-    return `${CONFIG.GATEWAYS.SEQURA.API_URL}/checkout?${params.toString()}`;
+    // Redirect to internal checkout page to handle Sequra's specific flow (Solicitation -> Form)
+    return `${CONFIG.APP.URL}/checkout/sequra/${metadata.link_id}`;
 }

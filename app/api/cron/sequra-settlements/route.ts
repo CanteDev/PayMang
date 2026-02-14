@@ -82,10 +82,18 @@ export async function GET(request: NextRequest) {
 /**
  * Obtener settlements de seQura para una fecha
  */
+import { getAppConfig } from '@/lib/config/server-config';
+
+/**
+ * Obtener settlements de seQura para una fecha
+ */
 async function fetchSeQuraSettlements(date: string): Promise<any[]> {
-    const apiUrl = CONFIG.GATEWAYS.SEQURA.API_URL;
-    const merchantId = CONFIG.GATEWAYS.SEQURA.MERCHANT_ID;
-    const apiKey = CONFIG.GATEWAYS.SEQURA.API_KEY;
+    const config = await getAppConfig('sequra_config');
+
+    // Config fallback logic is in getAppConfig, so config should be populated if .env exists
+    const apiUrl = config?.API_URL || config?.apiUrl;
+    const merchantId = config?.MERCHANT_ID || config?.merchantId;
+    const apiKey = config?.API_KEY || config?.apiKey;
 
     if (!apiUrl || !merchantId || !apiKey) {
         console.error('Configuración de seQura incompleta');
@@ -231,7 +239,7 @@ async function createMilestoneCommissions({
             sale_id: saleId,
             agent_id: coachId,
             agent_role: 'coach',
-            amount: calculateCommission(milestoneAmount, CONFIG.COMMISSION_RATES.COACH),
+            amount: await calculateCommission(milestoneAmount, 'coach'),
             status: 'pending',
             milestone: milestoneNumber,
         });
@@ -243,7 +251,7 @@ async function createMilestoneCommissions({
             sale_id: saleId,
             agent_id: closerId,
             agent_role: 'closer',
-            amount: calculateCommission(milestoneAmount, CONFIG.COMMISSION_RATES.CLOSER),
+            amount: await calculateCommission(milestoneAmount, 'closer'),
             status: 'pending',
             milestone: milestoneNumber,
         });
@@ -255,7 +263,7 @@ async function createMilestoneCommissions({
             sale_id: saleId,
             agent_id: setterId,
             agent_role: 'setter',
-            amount: calculateCommission(milestoneAmount, CONFIG.COMMISSION_RATES.SETTER),
+            amount: await calculateCommission(milestoneAmount, 'setter'),
             status: 'pending',
             milestone: milestoneNumber,
         });

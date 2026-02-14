@@ -23,6 +23,7 @@ interface StudentFormProps {
         phone: string | null;
         assigned_coach_id: string | null;
         closer_id: string | null;
+        setter_id: string | null;
         status: string;
     };
     onSuccess?: (student?: any) => void;
@@ -39,10 +40,12 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
     const [phone, setPhone] = useState(student?.phone || '');
     const [assignedCoachId, setAssignedCoachId] = useState(student?.assigned_coach_id || '');
     const [closerId, setCloserId] = useState(student?.closer_id || '');
+    const [setterId, setSetterId] = useState(student?.setter_id || '');
     const [status, setStatus] = useState(student?.status || 'active');
 
     const [coaches, setCoaches] = useState<any[]>([]);
     const [closers, setClosers] = useState<any[]>([]);
+    const [setters, setSetters] = useState<any[]>([]);
 
     const supabase = createClient();
 
@@ -50,6 +53,7 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
         if (open) {
             loadCoaches();
             loadClosers();
+            loadSetters();
         }
     }, [open]);
 
@@ -75,6 +79,17 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
         if (data) setClosers(data);
     };
 
+    const loadSetters = async () => {
+        const { data } = await supabase
+            .from('profiles')
+            .select('id, full_name, email')
+            .eq('role', 'setter')
+            .eq('is_active', true)
+            .order('full_name');
+
+        if (data) setSetters(data);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -87,6 +102,7 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                 phone: phone.trim() || null,
                 assigned_coach_id: assignedCoachId || null,
                 closer_id: closerId || null,
+                setter_id: setterId || null,
                 status,
             };
 
@@ -125,6 +141,7 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                 setPhone('');
                 setAssignedCoachId('');
                 setCloserId('');
+                setSetterId('');
                 setStatus('active');
             }
         } catch (err: any) {
@@ -245,6 +262,24 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                     </div>
 
                     <div className="space-y-2">
+                        <Label htmlFor="setter">Setter Asignado</Label>
+                        <select
+                            id="setter"
+                            value={setterId}
+                            onChange={(e) => setSetterId(e.target.value)}
+                            className="w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
+                            disabled={loading}
+                        >
+                            <option value="">Sin setter asignado</option>
+                            {setters.map(setter => (
+                                <option key={setter.id} value={setter.id}>
+                                    {setter.full_name} ({setter.email})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="space-y-2">
                         <Label htmlFor="status">Estado</Label>
                         <select
                             id="status"
@@ -254,6 +289,7 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                             disabled={loading}
                         >
                             <option value="active">Activo</option>
+                            <option value="inactive">Inactivo</option>
                             <option value="finished">Finalizado</option>
                             <option value="defaulted">Impago</option>
                         </select>

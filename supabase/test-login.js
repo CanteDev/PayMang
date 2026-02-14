@@ -22,10 +22,11 @@ async function testLogin() {
     const supabase = createClient(supabaseUrl, anonKey);
 
     const testUsers = [
+        { email: 'admin@paymang.com', password: 'PrimaveraVerano.01', role: 'admin' },
         { email: 'canteriyu@gmail.com', password: 'PayMang2024!', role: 'admin' },
-        { email: 'coach@test.com', password: 'Coach123!', role: 'coach' },
-        { email: 'closer@test.com', password: 'Closer123!', role: 'closer' },
-        { email: 'setter@test.com', password: 'Setter123!', role: 'setter' }
+        { email: 'coach@test.com', password: 'Password123!', role: 'coach' },
+        { email: 'closer@test.com', password: 'Password123!', role: 'closer' },
+        { email: 'setter@test.com', password: 'Password123!', role: 'setter' }
     ];
 
     for (const testUser of testUsers) {

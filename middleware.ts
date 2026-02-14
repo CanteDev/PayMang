@@ -14,6 +14,6 @@ export const config = {
          * - favicon.ico (favicon file)
          * - p/ (public payment links - estos no requieren auth)
          */
-        '/((?!_next/static|_next/image|favicon.ico|p/).*)',
+        '/((?!_next/static|_next/image|favicon.ico|p/|api/webhooks|api/test).*)',
     ],
 };

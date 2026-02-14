@@ -1,4 +1,4 @@
-import { CONFIG } from '@/config/app.config';
+import { getAppConfig } from '@/lib/config/server-config';
 import type { UserRole } from '@/config/app.config';
 
 /**
@@ -14,11 +14,21 @@ interface CommissionCalculation {
 /**
  * Calcula el importe de comisión para un rol específico
  */
-export function calculateCommission(
+export async function calculateCommission(
     totalAmount: number,
     role: UserRole
-): number {
-    const rate = CONFIG.COMMISSION_RATES[role.toUpperCase() as Uppercase<UserRole>];
+): Promise<number> {
+    const rates = await getAppConfig('commission_rates');
+    // Normalize keys to lowercase for DB compatibility (e.g. coach vs COACH)
+    // The default config uses uppercase keys in code... 
+    // In DB seed I used lowercase: {"coach": 0.10...}
+    // Let's handle both or standardized.
+    // The DB seed has keys as "coach", "closer", "setter".
+    // The code CONFIG has "COACH", "CLOSER", "SETTER".
+
+    // We try lowercase first (DB convention), then uppercase (Legacy Config convention)
+    const rate = rates[role.toLowerCase()] ?? rates[role.toUpperCase()] ?? 0;
+
     if (!rate) return 0;
 
     const commission = totalAmount * rate;
@@ -29,33 +39,37 @@ export function calculateCommission(
 /**
  * Calcula todas las comisiones para una venta
  */
-export function calculateAllCommissions(
+export async function calculateAllCommissions(
     totalAmount: number,
     roles: { coach?: boolean; closer?: boolean; setter?: boolean }
-): CommissionCalculation[] {
+): Promise<CommissionCalculation[]> {
     const commissions: CommissionCalculation[] = [];
+    const rates = await getAppConfig('commission_rates');
 
     if (roles.coach) {
+        const rate = rates['coach'] ?? rates['COACH'] ?? 0;
         commissions.push({
             role: 'coach',
-            amount: calculateCommission(totalAmount, 'coach'),
-            percentage: CONFIG.COMMISSION_RATES.COACH,
+            amount: Math.round(totalAmount * rate * 100) / 100,
+            percentage: rate,
         });
     }
 
     if (roles.closer) {
+        const rate = rates['closer'] ?? rates['CLOSER'] ?? 0;
         commissions.push({
             role: 'closer',
-            amount: calculateCommission(totalAmount, 'closer'),
-            percentage: CONFIG.COMMISSION_RATES.CLOSER,
+            amount: Math.round(totalAmount * rate * 100) / 100,
+            percentage: rate,
         });
     }
 
     if (roles.setter) {
+        const rate = rates['setter'] ?? rates['SETTER'] ?? 0;
         commissions.push({
             role: 'setter',
-            amount: calculateCommission(totalAmount, 'setter'),
-            percentage: CONFIG.COMMISSION_RATES.SETTER,
+            amount: Math.round(totalAmount * rate * 100) / 100,
+            percentage: rate,
         });
     }
 
@@ -65,12 +79,19 @@ export function calculateAllCommissions(
 /**
  * Calcula el importe para un milestone específico de seQura
  */
-export function calculateSeQuraMilestone(
+export async function calculateSeQuraMilestone(
     totalAmount: number,
     milestone: 1 | 2 | 3
-): number {
-    const milestoneKey = `MILESTONE_${milestone}` as keyof typeof CONFIG.SEQURA_MILESTONES;
-    const percentage = CONFIG.SEQURA_MILESTONES[milestoneKey];
+): Promise<number> {
+    const milestones = await getAppConfig('sequra_milestones');
+    // DB keys: initial, second, final
+    // Config Legacy: MILESTONE_1, MILESTONE_2, MILESTONE_3
+
+    let percentage = 0;
+
+    if (milestone === 1) percentage = milestones['initial'] ?? milestones['MILESTONE_1'] ?? 0;
+    if (milestone === 2) percentage = milestones['second'] ?? milestones['MILESTONE_2'] ?? 0;
+    if (milestone === 3) percentage = milestones['final'] ?? milestones['MILESTONE_3'] ?? 0;
 
     const amount = totalAmount * percentage;
     return Math.round(amount * 100) / 100;
@@ -79,11 +100,12 @@ export function calculateSeQuraMilestone(
 /**
  * Genera todas las comisiones para un milestone de seQura
  */
-export function calculateSeQuraCommissions(
+export async function calculateSeQuraCommissions(
     totalAmount: number,
     milestone: 1 | 2 | 3,
     roles: { coach?: boolean; closer?: boolean; setter?: boolean }
-): CommissionCalculation[] {
-    const milestoneAmount = calculateSeQuraMilestone(totalAmount, milestone);
+): Promise<CommissionCalculation[]> {
+    const milestoneAmount = await calculateSeQuraMilestone(totalAmount, milestone);
     return calculateAllCommissions(milestoneAmount, roles);
 }
+

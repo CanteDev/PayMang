@@ -11,7 +11,8 @@ import {
     Link as LinkIcon,
     UserCog,
     TrendingUp,
-    LogOut
+    LogOut,
+    Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
@@ -42,9 +43,10 @@ export default function Sidebar({ profile }: SidebarProps) {
                     { href: '/admin/staff', label: 'Equipo', icon: UserCog },
                     { href: '/admin/students', label: 'Alumnos', icon: Users },
                     { href: '/admin/payments', label: 'Pagos', icon: DollarSign },
-                    { href: '/admin/payslips', label: 'Liquidaciones', icon: FileText },
+                    { href: '/admin/payslips', label: 'Comisiones', icon: FileText },
                     { href: '/admin/incidences', label: 'Incidencias', icon: AlertCircle },
                     { href: '/admin/expenses', label: 'Gastos', icon: TrendingUp },
+                    { href: '/admin/settings', label: 'Configuración', icon: Settings },
                 ];
             case 'closer':
                 return [

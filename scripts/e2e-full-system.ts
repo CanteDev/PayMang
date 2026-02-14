@@ -143,6 +143,24 @@ async function runE2ETest() {
         await page.waitForSelector('#closer');
         await page.select('#closer', await page.$eval('#closer option:nth-child(2)', el => el.getAttribute('value') || ''));
 
+        // Select Coach (now mandatory if student has no coach)
+        console.log('🔵 [CLOSER] Selecting Coach...');
+        await page.waitForSelector('#coach');
+
+        // Wait for coaches to populate
+        await page.waitForFunction(() => {
+            const select = document.querySelector('#coach') as HTMLSelectElement;
+            return select && select.options.length > 1;
+        }, { timeout: 5000 });
+
+        // Check if enabled (should be, since new student has no coach)
+        const isCoachDisabled = await page.$eval('#coach', (el) => (el as HTMLSelectElement).disabled);
+        if (!isCoachDisabled) {
+            await page.select('#coach', await page.$eval('#coach option:nth-child(2)', el => el.getAttribute('value') || ''));
+        } else {
+            console.warn('⚠️ Coach selector is disabled, but expected to be enabled for new student');
+        }
+
         // Check for error messages first
         const errorMsg = await page.evaluate(() => {
             const el = document.querySelector('.text-red-700');

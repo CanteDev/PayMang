@@ -5,15 +5,19 @@ import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Users, Search, User } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Users, Search, User, Filter, Calendar, Edit2 } from 'lucide-react';
 import StudentForm from '@/components/admin/StudentForm';
 
 interface Student {
     id: string;
     email: string;
     full_name: string;
+    phone: string | null;
     status: string;
     assigned_coach_id: string | null;
+    closer_id: string | null;
+    setter_id: string | null;
     coach?: {
         full_name: string;
     };
@@ -22,25 +26,68 @@ interface Student {
 
 export default function AdminStudentsPage() {
     const [students, setStudents] = useState<Student[]>([]);
+    const [coaches, setCoaches] = useState<{ id: string, full_name: string }[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Filters
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedMonth, setSelectedMonth] = useState<string>('all');
+    const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [coachFilter, setCoachFilter] = useState<string>('all');
 
     const supabase = createClient();
 
     useEffect(() => {
-        loadStudents();
+        loadCoaches();
     }, []);
+
+    useEffect(() => {
+        loadStudents();
+    }, [selectedMonth, statusFilter, coachFilter]);
+
+    const loadCoaches = async () => {
+        const { data } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('role', ['coach', 'closer', 'setter']) // Include all potential agents who might be assigned
+            .order('full_name');
+        setCoaches(data || []);
+    };
 
     const loadStudents = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('students')
                 .select(`
                     *,
                     coach:profiles!assigned_coach_id(full_name)
                 `)
-                .order('full_name');
+                .order('created_at', { ascending: false });
+
+            // Date Filter (Registration Month)
+            if (selectedMonth !== 'all') {
+                const [year, month] = selectedMonth.split('-');
+                const startDate = new Date(parseInt(year), parseInt(month) - 1, 1).toISOString();
+                const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59).toISOString();
+                query = query.gte('created_at', startDate).lte('created_at', endDate);
+            }
+
+            // Status Filter
+            if (statusFilter !== 'all') {
+                query = query.eq('status', statusFilter);
+            }
+
+            // Coach Filter
+            if (coachFilter !== 'all') {
+                if (coachFilter === 'unassigned') {
+                    query = query.is('assigned_coach_id', null);
+                } else {
+                    query = query.eq('assigned_coach_id', coachFilter);
+                }
+            }
+
+            const { data, error } = await query;
 
             if (error) throw error;
             setStudents(data || []);
@@ -51,6 +98,7 @@ export default function AdminStudentsPage() {
         }
     };
 
+    // Client-side search (Server filter for Date/Status/Coach, Client for Name/Email)
     const filteredStudents = students.filter(student =>
         student.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         student.email?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -74,6 +122,16 @@ export default function AdminStudentsPage() {
         );
     };
 
+    // Generate last 12 months for filter
+    const availableMonths = Array.from({ length: 12 }, (_, i) => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        d.setDate(1);
+        const key = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+        const label = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+        return { key, label };
+    });
+
     return (
         <div className="space-y-6">
             <div>
@@ -92,15 +150,68 @@ export default function AdminStudentsPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    {/* Search */}
-                    <div className="flex gap-4 mb-6">
-                        <div className="flex-1 relative">
-                            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    {/* Filters Row */}
+                    <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between items-start md:items-center bg-gray-50/50 p-4 rounded-lg border border-gray-100">
+                        <div className="flex flex-wrap gap-4 w-full md:w-auto">
+                            {/* Period Filter */}
+                            <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-gray-500" />
+                                <select
+                                    value={selectedMonth}
+                                    onChange={(e) => setSelectedMonth(e.target.value)}
+                                    className="h-9 rounded-md border text-sm bg-white px-2 py-1 max-w-[160px] focus:ring-2 focus:ring-slate-200 focus:border-slate-400 outline-none"
+                                >
+                                    <option value="all">Todo el periodo</option>
+                                    {availableMonths.map(month => (
+                                        <option key={month.key} value={month.key}>
+                                            {month.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Coach Filter */}
+                            <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 text-gray-500" />
+                                <select
+                                    value={coachFilter}
+                                    onChange={(e) => setCoachFilter(e.target.value)}
+                                    className="h-9 rounded-md border text-sm bg-white px-2 py-1 max-w-[160px] focus:ring-2 focus:ring-slate-200 focus:border-slate-400 outline-none"
+                                >
+                                    <option value="all">Todos los coaches</option>
+                                    <option value="unassigned">Sin asignar</option>
+                                    {coaches.map(coach => (
+                                        <option key={coach.id} value={coach.id}>
+                                            {coach.full_name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Status Filter */}
+                            <div className="flex items-center gap-2">
+                                <Filter className="w-4 h-4 text-gray-500" />
+                                <select
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value)}
+                                    className="h-9 rounded-md border text-sm bg-white px-2 py-1 max-w-[160px] focus:ring-2 focus:ring-slate-200 focus:border-slate-400 outline-none"
+                                >
+                                    <option value="all">Todos los estados</option>
+                                    <option value="active">Activo</option>
+                                    <option value="inactive">Inactivo</option>
+                                    <option value="paused">Pausado</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Search */}
+                        <div className="relative w-full md:w-64">
+                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                             <Input
                                 placeholder="Buscar por nombre o email..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-9"
+                                className="pl-9 h-9 bg-white"
                             />
                         </div>
                     </div>
@@ -118,13 +229,14 @@ export default function AdminStudentsPage() {
                                         <TableHead>Coach Asignado</TableHead>
                                         <TableHead>Estado</TableHead>
                                         <TableHead>Fecha Registro</TableHead>
+                                        <TableHead className="text-right">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {filteredStudents.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                                                No se encontraron alumnos
+                                                No se encontraron alumnos con estos filtros
                                             </TableCell>
                                         </TableRow>
                                     ) : (
@@ -145,6 +257,17 @@ export default function AdminStudentsPage() {
                                                 <TableCell>{getStatusBadge(student.status)}</TableCell>
                                                 <TableCell className="text-gray-500 text-sm">
                                                     {new Date(student.created_at).toLocaleDateString()}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <StudentForm
+                                                        student={student}
+                                                        onSuccess={loadStudents}
+                                                        trigger={
+                                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                                                <Edit2 className="h-4 w-4" />
+                                                            </Button>
+                                                        }
+                                                    />
                                                 </TableCell>
                                             </TableRow>
                                         ))

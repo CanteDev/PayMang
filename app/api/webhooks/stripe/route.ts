@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 import { CONFIG } from '@/config/app.config';
 import { calculateCommission } from '@/lib/commissions/calculator';
+import Stripe from 'stripe';
+import { getGatewayConfig } from '@/lib/settings-helper';
+
+/**
+ * Helper to get Service Role Client
+ */
+function getSupabaseAdmin() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    if (!serviceRoleKey) throw new Error('SERVICE_ROLE_KEY missing');
+    return createClient(supabaseUrl, serviceRoleKey);
+}
 
 /**
  * Webhook handler para Stripe
@@ -10,8 +22,8 @@ import { calculateCommission } from '@/lib/commissions/calculator';
  */
 export async function POST(request: NextRequest) {
     const body = await request.text();
-    const headersList = headers();
-    const sig = (await headersList).get('stripe-signature');
+    const headersList = await headers();
+    const sig = headersList.get('stripe-signature');
 
     if (!sig) {
         return NextResponse.json(
@@ -20,11 +32,26 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    // TODO: Verificar signature de Stripe
-    // const event = stripe.webhooks.constructEvent(body, sig, CONFIG.GATEWAYS.STRIPE.WEBHOOK_SECRET);
+    const config = await getGatewayConfig('stripe');
+    const webhookSecret = config.webhook_secret;
 
-    // Por ahora, parseamos el body directamente
-    const event = JSON.parse(body);
+    let event;
+
+    if (webhookSecret && config.secret_key) {
+        try {
+            const stripe = new Stripe(config.secret_key, {
+                apiVersion: '2026-01-28.clover',
+            });
+            event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
+            console.log('✅ Webhook de Stripe verificado correctamente');
+        } catch (err: any) {
+            console.error(`⚠️ Error verificando firma de Stripe: ${err.message}`);
+            return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
+        }
+    } else {
+        console.warn('⚠️ Webhook Secret no configurado, saltando verificación de firma');
+        event = JSON.parse(body);
+    }
 
     try {
         switch (event.type) {
@@ -54,7 +81,7 @@ export async function POST(request: NextRequest) {
  * Manejar checkout completado (pago exitoso)
  */
 async function handleCheckoutCompleted(session: any) {
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     // Extraer metadata
     const linkId = session.metadata?.link_id;
@@ -74,8 +101,13 @@ async function handleCheckoutCompleted(session: any) {
         .single();
 
     if (linkError || !link) {
-        console.error('Link no encontrado:', linkId);
+        console.error('Link no encontrado:', linkId, linkError);
         return;
+    }
+
+    // Check metadata content
+    if (!link.metadata) {
+        console.warn('Metadata vacía para link:', link.id);
     }
 
     const { coach_id, closer_id, setter_id } = link.metadata || {};
@@ -87,13 +119,17 @@ async function handleCheckoutCompleted(session: any) {
         .insert({
             student_id: studentId,
             pack_id: packId,
-            amount: totalAmount,
+            total_amount: totalAmount,
+            amount_collected: totalAmount, // Stripe is full payment
             gateway: 'stripe',
             transaction_id: session.id,
             status: 'paid',
             metadata: {
                 payment_intent: session.payment_intent,
                 customer: session.customer,
+                coach_id, // Persist metadata in sale 
+                closer_id,
+                setter_id
             },
         })
         .select()
@@ -126,7 +162,7 @@ async function handleCheckoutCompleted(session: any) {
  * Manejar reembolso
  */
 async function handleChargeRefunded(charge: any) {
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
 
     const transactionId = charge.id;
 
@@ -173,7 +209,7 @@ async function createCommissions({
     closerId: string;
     setterId?: string;
 }) {
-    const supabase = await createClient();
+    const supabase = getSupabaseAdmin();
     const commissions: any[] = [];
 
     // Coach: 10%
@@ -181,8 +217,8 @@ async function createCommissions({
         commissions.push({
             sale_id: saleId,
             agent_id: coachId,
-            agent_role: 'coach',
-            amount: calculateCommission(totalAmount, CONFIG.COMMISSION_RATES.COACH),
+            role_at_sale: 'coach',
+            amount: calculateCommission(totalAmount, 'coach'),
             status: 'pending',
             milestone: 1, // pago único
         });
@@ -193,8 +229,8 @@ async function createCommissions({
         commissions.push({
             sale_id: saleId,
             agent_id: closerId,
-            agent_role: 'closer',
-            amount: calculateCommission(totalAmount, CONFIG.COMMISSION_RATES.CLOSER),
+            role_at_sale: 'closer',
+            amount: calculateCommission(totalAmount, 'closer'),
             status: 'pending',
             milestone: 1,
         });
@@ -205,8 +241,8 @@ async function createCommissions({
         commissions.push({
             sale_id: saleId,
             agent_id: setterId,
-            agent_role: 'setter',
-            amount: calculateCommission(totalAmount, CONFIG.COMMISSION_RATES.SETTER),
+            role_at_sale: 'setter',
+            amount: calculateCommission(totalAmount, 'setter'),
             status: 'pending',
             milestone: 1,
         });

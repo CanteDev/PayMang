@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import CommissionTable from '@/components/dashboard/CommissionTable';
+import StaffCommissionTable from '@/components/dashboard/StaffCommissionTable';
 
 export default function SetterCommissionsPage() {
     const [userId, setUserId] = useState<string | null>(null);
@@ -11,7 +11,9 @@ export default function SetterCommissionsPage() {
     useEffect(() => {
         const getUser = async () => {
             const { data: { user } } = await supabase.auth.getUser();
-            if (user) setUserId(user.id);
+            if (user) {
+                setUserId(user.id);
+            }
         };
         getUser();
     }, []);
@@ -22,9 +24,10 @@ export default function SetterCommissionsPage() {
         <div className="space-y-6">
             <div>
                 <h1 className="text-3xl font-semibold text-gray-900">Mis Comisiones</h1>
-                <p className="text-gray-600 mt-1">Historial de comisiones por agendamiento</p>
+                <p className="text-gray-600 mt-1">Historial detallado y resumen de ganancias</p>
             </div>
-            <CommissionTable userRole="setter" userId={userId} />
+            {/* New Staff Table with Summary Footer */}
+            <StaffCommissionTable userId={userId} />
         </div>
     );
 }

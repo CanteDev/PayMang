@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Users, Search, UserCog } from 'lucide-react';
+import { Users, Search, UserCog, Edit2 } from 'lucide-react';
+import TeamMemberForm from '@/components/admin/TeamMemberForm';
 
 interface Profile {
     id: string;
@@ -85,7 +86,7 @@ export default function AdminStaffPage() {
                             <Users className="w-5 h-5" />
                             <span>Listado de Miembros</span>
                         </CardTitle>
-                        {/* Future: Add Invite Button */}
+                        <TeamMemberForm onSuccess={loadStaff} />
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -126,6 +127,7 @@ export default function AdminStaffPage() {
                                         <TableHead>Rol</TableHead>
                                         <TableHead>Estado</TableHead>
                                         <TableHead>Fecha Registro</TableHead>
+                                        <TableHead className="text-right">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -148,6 +150,17 @@ export default function AdminStaffPage() {
                                                 </TableCell>
                                                 <TableCell className="text-gray-500 text-sm">
                                                     {new Date(member.created_at).toLocaleDateString()}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <TeamMemberForm
+                                                        member={member}
+                                                        onSuccess={loadStaff}
+                                                        trigger={
+                                                            <Button variant="ghost" size="sm">
+                                                                <Edit2 className="w-4 h-4 text-gray-500" />
+                                                            </Button>
+                                                        }
+                                                    />
                                                 </TableCell>
                                             </TableRow>
                                         ))

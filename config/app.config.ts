@@ -67,8 +67,8 @@ export const CONFIG = {
 
 // Tipos derivados
 export type UserRole = 'admin' | 'closer' | 'coach' | 'setter';
-export type StudentStatus = 'active' | 'finished' | 'defaulted';
+export type StudentStatus = 'active' | 'finished' | 'defaulted' | 'inactive';
 export type GatewayType = 'stripe' | 'hotmart' | 'sequra';
 export type SaleStatus = 'pending' | 'paid' | 'refunded';
-export type CommissionStatus = 'pending' | 'incidence' | 'validated' | 'paid';
+export type CommissionStatus = 'pending' | 'incidence' | 'validated' | 'paid' | 'cancelled';
 export type LinkStatus = 'pending' | 'clicked' | 'paid' | 'deleted';

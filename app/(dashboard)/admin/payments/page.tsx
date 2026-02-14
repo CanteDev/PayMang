@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { DollarSign, Search, CreditCard, Filter } from 'lucide-react';
+import { DollarSign, Search, CreditCard, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Sale {
     id: string;
@@ -29,26 +30,50 @@ export default function AdminPaymentsPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [gatewayFilter, setGatewayFilter] = useState('all');
 
+    // Pagination State
+    const [page, setPage] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const PAGE_SIZE = 20;
+
     const supabase = createClient();
 
+    // Reset page on filter change
+    useEffect(() => {
+        setPage(1);
+    }, [gatewayFilter, searchTerm]);
+
+    // Load data
     useEffect(() => {
         loadSales();
-    }, []);
+    }, [page, gatewayFilter]);
 
     const loadSales = async () => {
         setLoading(true);
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('sales')
                 .select(`
                     *,
                     student:students(full_name, email),
                     pack:packs(name)
-                `)
+                `, { count: 'exact' })
                 .order('created_at', { ascending: false });
+
+            // Server-side filter
+            if (gatewayFilter !== 'all') {
+                query = query.eq('gateway', gatewayFilter);
+            }
+
+            // Pagination
+            const from = (page - 1) * PAGE_SIZE;
+            const to = from + PAGE_SIZE - 1;
+            query = query.range(from, to);
+
+            const { data, error, count } = await query;
 
             if (error) throw error;
             setSales(data || []);
+            setTotalCount(count || 0);
         } catch (error) {
             console.error('Error loading sales:', error);
         } finally {
@@ -56,16 +81,8 @@ export default function AdminPaymentsPage() {
         }
     };
 
-    const filteredSales = sales.filter(sale => {
-        const matchesSearch =
-            sale.student?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            sale.student?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            sale.pack?.name?.toLowerCase().includes(searchTerm.toLowerCase());
-
-        const matchesGateway = gatewayFilter === 'all' || sale.gateway === gatewayFilter;
-
-        return matchesSearch && matchesGateway;
-    });
+    // Note: Search is currently client-side on the fetched page only.
+    const filteredSales = sales;
 
     const getStatusBadge = (status: string) => {
         const styles = {
@@ -95,6 +112,41 @@ export default function AdminPaymentsPage() {
             </span>
         );
     }
+    const isRefundable = (createdAt: string) => {
+        const saleDate = new Date(createdAt);
+        const now = new Date();
+        const differenceInTime = now.getTime() - saleDate.getTime();
+        const differenceInDays = differenceInTime / (1000 * 3600 * 24);
+        return differenceInDays <= 14;
+    };
+
+    const handleRefund = async (saleId: string) => {
+        if (!confirm('¿Estás seguro de que deseas reembolsar este pago? Esta acción no se puede deshacer y cancelará las comisiones asociadas.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/admin/refund', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ saleId }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Error al procesar el reembolso');
+            }
+
+            alert('Reembolso procesado correctamente');
+            loadSales(); // Reload the table
+        } catch (error: any) {
+            console.error('Error:', error);
+            alert(error.message || 'Error al procesar el reembolso');
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -154,12 +206,13 @@ export default function AdminPaymentsPage() {
                                         <TableHead>Pasarela</TableHead>
                                         <TableHead>Estado</TableHead>
                                         <TableHead className="text-right">Monto</TableHead>
+                                        <TableHead className="text-right">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {filteredSales.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                                            <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                                                 No se encontraron pagos
                                             </TableCell>
                                         </TableRow>
@@ -181,6 +234,16 @@ export default function AdminPaymentsPage() {
                                                 <TableCell className="text-right font-medium">
                                                     {sale.total_amount?.toFixed(2)}€
                                                 </TableCell>
+                                                <TableCell className="text-right">
+                                                    {(sale.status === 'completed' || sale.status === 'paid') && isRefundable(sale.created_at) && (
+                                                        <button
+                                                            onClick={() => handleRefund(sale.id)}
+                                                            className="text-xs text-red-600 hover:text-red-800 font-medium underline"
+                                                        >
+                                                            Reembolsar
+                                                        </button>
+                                                    )}
+                                                </TableCell>
                                             </TableRow>
                                         ))
                                     )}
@@ -188,6 +251,33 @@ export default function AdminPaymentsPage() {
                             </Table>
                         </div>
                     )}
+
+                    {/* Paginación */}
+                    <div className="flex items-center justify-between mt-4 border-t pt-4">
+                        <div className="text-sm text-gray-500">
+                            Mostrando {((page - 1) * PAGE_SIZE) + 1} a {Math.min(page * PAGE_SIZE, totalCount)} de {totalCount} resultados
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1 || loading}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                                Anterior
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage(p => p + 1)}
+                                disabled={page * PAGE_SIZE >= totalCount || loading}
+                            >
+                                Siguiente
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
         </div>

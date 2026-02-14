@@ -38,6 +38,8 @@ export interface Student {
     phone: string | null;
     status: StudentStatus;
     assigned_coach_id: string | null;
+    closer_id: string | null;
+    setter_id: string | null;
     external_data: Record<string, any>;
     created_at: string;
     updated_at: string;
@@ -56,6 +58,12 @@ export interface Sale {
         closer_id?: string;
         coach_id?: string;
         setter_id?: string;
+    };
+    sequra_order_ref?: string;
+    sequra_payment_status?: {
+        initial_70: boolean;
+        second_15: boolean;
+        final_15: boolean;
     };
     created_at: string;
     updated_at: string;
@@ -78,14 +86,17 @@ export interface Commission {
 
 export interface Expense {
     id: string;
-    description: string;
-    category: string;
-    amount: number;
+    created_at: string;
     start_date: string;
     end_date: string | null;
-    created_by: string;
-    created_at: string;
-    updated_at: string;
+    concept: string;
+    amount: number;
+    category: string;
+    type: 'fijo' | 'variable';
+    recurring: boolean;
+    notes: string | null;
+    user_id: string | null;
+    updated_at?: string; // Optional if not in table or generated
 }
 
 export interface PaymentLink {
@@ -102,6 +113,15 @@ export interface PaymentLink {
     status: LinkStatus;
     clicked_at: string | null;
     created_at: string;
+    updated_at: string;
+}
+
+export interface AppSettings {
+    key: string;
+    value: any;
+    category: 'payment' | 'business' | 'system';
+    description: string | null;
+    encrypted: boolean;
     updated_at: string;
 }
 
@@ -143,6 +163,11 @@ export interface Database {
                 Row: PaymentLink;
                 Insert: Omit<PaymentLink, 'created_at' | 'updated_at'>;
                 Update: Partial<Omit<PaymentLink, 'id' | 'created_at' | 'updated_at'>>;
+            };
+            app_settings: {
+                Row: AppSettings;
+                Insert: Omit<AppSettings, 'updated_at'>;
+                Update: Partial<Omit<AppSettings, 'key'>>;
             };
         };
     };

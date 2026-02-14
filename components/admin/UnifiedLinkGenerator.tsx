@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { nanoid } from 'nanoid';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,7 @@ export default function UnifiedLinkGenerator() {
     const [packs, setPacks] = useState<Pack[]>([]);
     const [closers, setClosers] = useState<Profile[]>([]);
     const [setters, setSetters] = useState<Profile[]>([]);
+    const [coaches, setCoaches] = useState<Profile[]>([]);
 
     const [selectedStudent, setSelectedStudent] = useState<string>('');
     const [selectedPack, setSelectedPack] = useState<string>('');
@@ -103,9 +104,12 @@ export default function UnifiedLinkGenerator() {
         }
     };
 
+    const prevSelectedStudentRef = useRef<string>('');
+
     // Actualizar info cuando cambia el estudiante
     useEffect(() => {
-        if (selectedStudent) {
+        // Solo actualizar si el estudiante seleccionado ha cambiado
+        if (selectedStudent && selectedStudent !== prevSelectedStudentRef.current) {
             const student = students.find(s => s.id === selectedStudent);
             if (student) {
                 // Autocompletar coach si está asignado
@@ -122,19 +126,40 @@ export default function UnifiedLinkGenerator() {
                     setSelectedCloser('');
                 }
             }
-        } else {
-            // Reset cuando no hay estudiante seleccionado
+            prevSelectedStudentRef.current = selectedStudent;
+        } else if (!selectedStudent && prevSelectedStudentRef.current) {
+            // Reset cuando se deselecciona
             setAssignedCoach('');
             setSelectedCloser('');
+            prevSelectedStudentRef.current = '';
         }
     }, [selectedStudent, students]);
+
+    // Added: Load coaches when component mounts or as needed
+    const loadCoaches = async () => {
+        const { data: coachesData } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('role', 'coach')
+            .eq('is_active', true)
+            .order('full_name');
+        if (coachesData) setCoaches(coachesData);
+    };
+
+    useEffect(() => {
+        loadCoaches();
+    }, []);
 
     // Actualizar pasarelas disponibles cuando cambia el pack
     useEffect(() => {
         if (selectedPack) {
             const pack = packs.find(p => p.id === selectedPack);
             if (pack?.gateway_ids) {
-                const gateways = Object.keys(pack.gateway_ids);
+                const gateways = [];
+                if (pack.gateway_ids.stripe_prod_id || pack.gateway_ids.stripe) gateways.push('stripe');
+                if (pack.gateway_ids.hotmart_prod_id || pack.gateway_ids.hotmart) gateways.push('hotmart');
+                if (pack.gateway_ids.sequra_merchant_id || pack.gateway_ids.sequra) gateways.push('sequra');
+
                 setAvailableGateways(gateways);
                 setSelectedGateway(''); // Reset gateway selection
             }
@@ -159,6 +184,32 @@ export default function UnifiedLinkGenerator() {
         }
 
         try {
+            // Si el estudiante no tenía coach asignado y seleccionamos uno ahora, lo asignamos
+            const student = students.find(s => s.id === selectedStudent);
+            if (student && !student.assigned_coach_id && assignedCoach) {
+                const { error: updateError } = await supabase
+                    .from('students')
+                    .update({ assigned_coach_id: assignedCoach } as any)
+                    .eq('id', selectedStudent);
+
+                if (updateError) {
+                    console.error('Error asignando coach:', updateError);
+                    // No bloqueamos la generación del link, pero avisamos? 
+                    // O quizás sí deberíamos bloquear. Por ahora solo log.
+                } else {
+                    // Actualizamos el estado local
+                    setStudents(prev => prev.map(s =>
+                        s.id === selectedStudent
+                            ? { ...s, assigned_coach_id: assignedCoach }
+                            : s
+                    ));
+                }
+            }
+
+            // Get current user for created_by field
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Usuario no autenticado');
+
             const shortCode = nanoid(8);
 
             const { error: insertError } = await supabase
@@ -169,12 +220,14 @@ export default function UnifiedLinkGenerator() {
                     pack_id: selectedPack,
                     gateway: selectedGateway,
                     status: 'pending',
+                    created_by: user.id,
+                    // @ts-ignore
                     metadata: {
                         coach_id: assignedCoach,
                         closer_id: selectedCloser,
                         setter_id: selectedSetter || null,
-                    },
-                });
+                    } as any,
+                } as any);
 
             if (insertError) throw insertError;
 
@@ -329,17 +382,29 @@ export default function UnifiedLinkGenerator() {
                     )}
                 </div>
 
-                {/* Coach (auto-asignado) */}
-                {assignedCoach && (
-                    <div className="space-y-2">
-                        <Label>Coach Asignado</Label>
-                        <Input
-                            value={assignedCoach}
-                            disabled
-                            className="bg-gray-100"
-                        />
-                    </div>
-                )}
+                {/* Coach Selection */}
+                <div className="space-y-2">
+                    <Label htmlFor="coach">Coach *</Label>
+                    <select
+                        id="coach"
+                        value={assignedCoach}
+                        onChange={(e) => setAssignedCoach(e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
+                        disabled={loading || (!!selectedStudent && !!students.find(s => s.id === selectedStudent)?.assigned_coach_id)}
+                    >
+                        <option value="">Seleccionar coach...</option>
+                        {coaches.map(coach => (
+                            <option key={coach.id} value={coach.id}>
+                                {coach.full_name} ({coach.email})
+                            </option>
+                        ))}
+                    </select>
+                    {selectedStudent && students.find(s => s.id === selectedStudent)?.assigned_coach_id && (
+                        <p className="text-xs text-gray-500">
+                            El coach está pre-asignado al estudiante y no se puede cambiar aquí.
+                        </p>
+                    )}
+                </div>
 
                 {/* Closer */}
                 <div className="space-y-2">
