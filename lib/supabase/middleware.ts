@@ -47,36 +47,47 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
     }
 
-    // Si hay usuario y está en login, redirigir al dashboard según rol
-    if (user && request.nextUrl.pathname === '/login') {
-        // Obtener el perfil del usuario para conocer su rol
+    // Si hay usuario, validar que su perfil esté activo
+    if (user) {
         const { data: profile } = await supabase
             .from('profiles')
-            .select('role')
+            .select('role, is_active')
             .eq('id', user.id)
             .single();
 
-        const url = request.nextUrl.clone();
-
-        // Redirigir según el rol
-        switch (profile?.role) {
-            case 'admin':
-                url.pathname = '/admin';
-                break;
-            case 'coach':
-                url.pathname = '/coach';
-                break;
-            case 'closer':
-                url.pathname = '/closer';
-                break;
-            case 'setter':
-                url.pathname = '/setter';
-                break;
-            default:
-                url.pathname = '/login';
+        // Si el usuario está inactivo, cerrar sesión y redirigir
+        if (profile && profile.is_active === false) {
+            await supabase.auth.signOut();
+            const url = request.nextUrl.clone();
+            url.pathname = '/login';
+            url.searchParams.set('error', 'Cuenta desactivada. Contacta con un administrador.');
+            return NextResponse.redirect(url);
         }
 
-        return NextResponse.redirect(url);
+        // Si hay usuario y está en login, redirigir al dashboard según rol
+        if (request.nextUrl.pathname === '/login') {
+            const url = request.nextUrl.clone();
+
+            // Redirigir según el rol
+            switch (profile?.role) {
+                case 'admin':
+                    url.pathname = '/admin';
+                    break;
+                case 'coach':
+                    url.pathname = '/coach';
+                    break;
+                case 'closer':
+                    url.pathname = '/closer';
+                    break;
+                case 'setter':
+                    url.pathname = '/setter';
+                    break;
+                default:
+                    url.pathname = '/login';
+            }
+
+            return NextResponse.redirect(url);
+        }
     }
 
     return supabaseResponse;

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,18 +9,33 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function LoginPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Cargando...</div>}>
+            <LoginForm />
+        </Suspense>
+    );
+}
+
+function LoginForm() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
+    const searchParams = useSearchParams();
+
+    useEffect(() => {
+        const errorMsg = searchParams.get('error');
+        if (errorMsg) {
+            setError(errorMsg);
+        }
+    }, [searchParams]);
+
     const handleLogin = async (e: React.FormEvent) => {
         const supabase = createClient();
         e.preventDefault();
         setLoading(true);
         setError(null);
-
-        console.log('🔐 Intentando login con:', email);
 
         try {
             const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -29,15 +44,12 @@ export default function LoginPage() {
             });
 
             if (signInError) {
-                console.error('❌ Error de autenticación:', signInError);
                 setError(signInError.message);
                 setLoading(false);
                 return;
             }
 
             if (data.user) {
-                console.log('✅ Usuario autenticado:', data.user.id);
-
                 // Obtener el rol del usuario
                 const { data: profile, error: profileError } = await supabase
                     .from('profiles')
@@ -46,19 +58,14 @@ export default function LoginPage() {
                     .single();
 
                 if (profileError) {
-                    console.error('❌ Error obteniendo perfil:', profileError);
                     setError('Error al obtener el perfil del usuario');
                     setLoading(false);
                     return;
                 }
 
-                console.log('👤 Perfil encontrado:', profile);
-
                 // Redirigir según el rol
                 if (profile && typeof profile === 'object' && 'role' in profile) {
                     const userRole = (profile as any).role as string;
-                    console.log('🚀 Redirigiendo a:', `/${userRole}`);
-
                     switch (userRole) {
                         case 'admin':
                             router.push('/admin');
@@ -81,7 +88,6 @@ export default function LoginPage() {
                 }
             }
         } catch (err) {
-            console.error('❌ Error inesperado:', err);
             setError('Error al iniciar sesión. Por favor, inténtalo de nuevo.');
             setLoading(false);
         }

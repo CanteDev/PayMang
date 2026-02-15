@@ -102,6 +102,13 @@ export async function updateStaff(prevState: any, formData: FormData) {
     try {
         const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+        // 1. Fetch current profile state
+        const { data: currentProfile } = await supabase
+            .from('profiles')
+            .select('is_active, email')
+            .eq('id', id)
+            .single();
+
         const { error } = await supabase
             .from('profiles')
             .update({
@@ -114,6 +121,23 @@ export async function updateStaff(prevState: any, formData: FormData) {
         if (error) {
             console.error('Error updating profile:', error);
             return { error: 'Error al actualizar perfil: ' + error.message };
+        }
+
+        // 2. If reactivating (false -> true), trigger invitation email
+        if (currentProfile && !currentProfile.is_active && isActive) {
+            console.log('Reactivating user, sending invitation:', currentProfile.email);
+            const { error: authError } = await supabase.auth.admin.inviteUserByEmail(currentProfile.email, {
+                data: {
+                    full_name: fullName,
+                    role: role,
+                },
+                redirectTo: process.env.NEXT_PUBLIC_APP_URL + '/auth/update-password',
+            });
+
+            if (authError) {
+                console.error('Error sending reactivation invite:', authError);
+                // We don't return error here because the profile WAS updated, just the email failed.
+            }
         }
 
         revalidatePath('/admin/staff');
