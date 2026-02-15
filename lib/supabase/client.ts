@@ -10,6 +10,9 @@ export function createClient() {
     const supabaseAnonKey = CONFIG.SUPABASE.ANON_KEY;
 
     if (!supabaseUrl || !supabaseAnonKey) {
+        if (typeof window !== 'undefined') {
+            console.error('❌ Supabase Client Error: NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY no están configuradas en Vercel.');
+        }
         // Return a placeholder client during build if variables are missing
         return createBrowserClient<Database>(
             'https://placeholder-project.supabase.co',
