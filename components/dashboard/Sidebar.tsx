@@ -43,7 +43,6 @@ export default function Sidebar({ profile }: SidebarProps) {
                     { href: '/admin/students', label: 'Alumnos', icon: Users },
                     { href: '/admin/payments', label: 'Pagos', icon: DollarSign },
                     { href: '/admin/payslips', label: 'Comisiones', icon: FileText },
-                    { href: '/admin/incidences', label: 'Incidencias', icon: AlertCircle },
                     { href: '/admin/expenses', label: 'Gastos', icon: TrendingUp },
                     { href: '/admin/settings', label: 'Configuración', icon: Settings },
                 ];
