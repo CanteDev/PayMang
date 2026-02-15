@@ -32,6 +32,7 @@ interface StudentFormProps {
         installment_amount?: number;
         installment_period?: number;
         start_date?: string;
+        agreed_price?: number;
     };
     onSuccess?: (student?: any) => void;
     trigger?: React.ReactNode;
@@ -53,8 +54,8 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
     // New Fields for Installments
     const [packId, setPackId] = useState(student?.pack_id || '');
     const [paymentMethod, setPaymentMethod] = useState<'upfront' | 'installments'>(student?.payment_method || 'upfront');
+    const [agreedPrice, setAgreedPrice] = useState(student?.agreed_price || 0);
     const [totalInstallments, setTotalInstallments] = useState(student?.total_installments || 1);
-    const [installmentAmount, setInstallmentAmount] = useState(student?.installment_amount || 0);
     const [installmentPeriod, setInstallmentPeriod] = useState(student?.installment_period || 1);
     const [startDate, setStartDate] = useState(student?.start_date || new Date().toISOString().split('T')[0]);
 
@@ -117,16 +118,15 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
         if (data) setSetters(data);
     };
 
-    // Auto-calculate installment amount if pack changes and is upfront
+    // Auto-calculate agreed price if pack changes
     useEffect(() => {
-        if (packId && paymentMethod === 'upfront') {
+        if (packId && packs.length > 0) {
             const pack = packs.find(p => p.id === packId);
             if (pack) {
-                setInstallmentAmount(pack.price);
-                setTotalInstallments(1);
+                setAgreedPrice(pack.price);
             }
         }
-    }, [packId, paymentMethod, packs]);
+    }, [packId, packs]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -146,10 +146,9 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                 pack_id: packId || null,
                 payment_method: paymentMethod,
                 total_installments: paymentMethod === 'installments' ? Number(totalInstallments) : 1,
-                installment_amount: Number(installmentAmount),
                 installment_period: paymentMethod === 'installments' ? Number(installmentPeriod) : 1,
                 start_date: startDate,
-                agreed_price: paymentMethod === 'upfront' ? Number(installmentAmount) : (Number(installmentAmount) * Number(totalInstallments))
+                agreed_price: Number(agreedPrice)
             };
 
             let resultStudent = null;
@@ -192,7 +191,6 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                 setPackId('');
                 setPaymentMethod('upfront');
                 setTotalInstallments(1);
-                setInstallmentAmount(0);
                 setInstallmentPeriod(1);
                 setStartDate(new Date().toISOString().split('T')[0]);
             }
@@ -339,6 +337,18 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                             {packId && (
                                 <>
                                     <div className="space-y-2">
+                                        <Label htmlFor="agreedPrice">Precio Final Acordado (€)</Label>
+                                        <Input
+                                            id="agreedPrice"
+                                            type="number"
+                                            step="0.01"
+                                            value={agreedPrice}
+                                            onChange={(e) => setAgreedPrice(Number(e.target.value))}
+                                            placeholder="Importe total"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
                                         <Label>Modalidad de Pago</Label>
                                         <div className="flex gap-4">
                                             <div className="flex items-center space-x-2">
@@ -389,16 +399,6 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                                                     value={installmentPeriod}
                                                     onChange={(e) => setInstallmentPeriod(Number(e.target.value))}
                                                     placeholder="1 = Mensual"
-                                                />
-                                            </div>
-                                            <div className="space-y-2 col-span-2">
-                                                <Label htmlFor="amount">Importe por Cuota (€)</Label>
-                                                <Input
-                                                    id="amount"
-                                                    type="number"
-                                                    step="0.01"
-                                                    value={installmentAmount}
-                                                    onChange={(e) => setInstallmentAmount(Number(e.target.value))}
                                                 />
                                             </div>
                                             <div className="space-y-2 col-span-2">
