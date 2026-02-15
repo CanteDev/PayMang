@@ -339,13 +339,16 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
         );
     };
 
-    // Note: Search is currently client-side on the fetched page only due to complexity of deep filtering. 
-    // Ideally we would debounce search and filter server-side.
-    const filteredCommissions = commissions; // Simplified for now as we use server-side filters for main fields
+    // Simplified for now as we use server-side filters for main fields
+    const filteredCommissions = commissions;
 
+    // Calculate Totals
     const totalAmount = filteredCommissions.reduce((sum, c) => sum + c.amount, 0);
+    const paidAmount = filteredCommissions
+        .filter(c => c.status === 'paid')
+        .reduce((sum, c) => sum + c.amount, 0);
     const pendingAmount = filteredCommissions
-        .filter(c => c.status === 'pending')
+        .filter(c => ['pending', 'validated', 'incidence'].includes(c.status))
         .reduce((sum, c) => sum + c.amount, 0);
 
     // Generate last 12 months for filter
@@ -367,19 +370,38 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
                             <DollarSign className="w-5 h-5" />
                             <span>Comisiones</span>
                         </CardTitle>
-                        <div className="flex items-center space-x-4">
-                            <div className="text-sm">
-                                <span className="text-gray-600">Total: </span>
-                                <span className="font-semibold">{totalAmount.toFixed(2)}€</span>
+                        {userRole === 'admin' && (
+                            <div className="flex items-center space-x-4">
+                                <div className="text-sm">
+                                    <span className="text-gray-600">Total: </span>
+                                    <span className="font-semibold">{totalAmount.toFixed(2)}€</span>
+                                </div>
+                                <div className="text-sm">
+                                    <span className="text-gray-600">Pendiente: </span>
+                                    <span className="font-semibold text-blue-600">{pendingAmount.toFixed(2)}€</span>
+                                </div>
                             </div>
-                            <div className="text-sm">
-                                <span className="text-gray-600">Pendiente: </span>
-                                <span className="font-semibold text-blue-600">{pendingAmount.toFixed(2)}€</span>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </CardHeader>
                 <CardContent>
+                    {userRole !== 'admin' && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div className="bg-gray-50 p-4 rounded-lg text-center border border-gray-200">
+                                <p className="text-sm text-gray-500 mb-1">Total Generado</p>
+                                <p className="text-xl font-bold text-gray-900">{totalAmount.toFixed(2)}€</p>
+                            </div>
+                            <div className="bg-blue-50 p-4 rounded-lg text-center border border-blue-100">
+                                <p className="text-sm text-blue-600 mb-1">Total Recibido (Pagado)</p>
+                                <p className="text-xl font-bold text-blue-700">{paidAmount.toFixed(2)}€</p>
+                            </div>
+                            <div className="bg-red-50 p-4 rounded-lg text-center border border-red-100">
+                                <p className="text-sm text-red-600 mb-1">Pendiente de Cobro</p>
+                                <p className="text-xl font-bold text-red-700">{pendingAmount.toFixed(2)}€</p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Filtros Row */}
                     <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between items-start md:items-center bg-gray-50/50 p-4 rounded-lg border border-gray-100">
                         <div className="flex flex-wrap gap-4 w-full md:w-auto">
