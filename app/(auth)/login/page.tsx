@@ -140,6 +140,12 @@ export default function LoginPage() {
                             </div>
                         )}
 
+                        <div className="flex justify-end pt-2">
+                            <a href="/forgot-password" className="text-sm font-medium text-primary-600 hover:text-primary-500">
+                                ¿Olvidaste tu contraseña?
+                            </a>
+                        </div>
+
                         <Button
                             type="submit"
                             className="w-full h-10 rounded-lg bg-primary-700 hover:bg-primary-800 text-white font-medium shadow-sm transition-colors"
@@ -150,6 +156,6 @@ export default function LoginPage() {
                     </form>
                 </CardContent>
             </Card>
-        </div>
+        </div >
     );
 }
