@@ -36,6 +36,7 @@ export default function AdminStudentsPage() {
     const [students, setStudents] = useState<Student[]>([]);
     const [coaches, setCoaches] = useState<{ id: string, full_name: string }[]>([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     // Filters
     const [searchTerm, setSearchTerm] = useState('');
@@ -65,6 +66,7 @@ export default function AdminStudentsPage() {
 
     const loadStudents = async () => {
         setLoading(true);
+        setError(null);
         try {
             let query = supabase
                 .from('students')
@@ -97,12 +99,13 @@ export default function AdminStudentsPage() {
                 }
             }
 
-            const { data, error } = await query;
+            const { data, error: fetchError } = await query;
 
-            if (error) throw error;
+            if (fetchError) throw fetchError;
             setStudents(data as any || []);
-        } catch (error) {
-            console.error('Error loading students:', error);
+        } catch (err: any) {
+            console.error('Error loading students:', err);
+            setError(err.message || 'Error al cargar alumnos');
         } finally {
             setLoading(false);
         }
@@ -262,6 +265,15 @@ export default function AdminStudentsPage() {
                             />
                         </div>
                     </div>
+                    {/* Error Display */}
+                    {error && (
+                        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex justify-between items-center">
+                            <span>{error}</span>
+                            <Button variant="ghost" size="sm" onClick={() => loadStudents()} className="h-8 hover:bg-red-100">
+                                Reintentar
+                            </Button>
+                        </div>
+                    )}
 
                     {/* Table */}
                     {loading ? (
