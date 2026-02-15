@@ -56,7 +56,8 @@ export async function updateSession(request: NextRequest) {
             .single();
 
         // Si el usuario está inactivo, cerrar sesión y redirigir
-        if (profile && profile.is_active === false) {
+        // EXCEPCIÓN: Permitimos /update-password para que termine la recuperación/invitación
+        if (profile && profile.is_active === false && request.nextUrl.pathname !== '/update-password') {
             await supabase.auth.signOut();
             const url = request.nextUrl.clone();
             url.pathname = '/login';
