@@ -337,18 +337,6 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                             {packId && (
                                 <>
                                     <div className="space-y-2">
-                                        <Label htmlFor="agreedPrice">Precio Final Acordado (€)</Label>
-                                        <Input
-                                            id="agreedPrice"
-                                            type="number"
-                                            step="0.01"
-                                            value={agreedPrice}
-                                            onChange={(e) => setAgreedPrice(Number(e.target.value))}
-                                            placeholder="Importe total"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
                                         <Label>Modalidad de Pago</Label>
                                         <div className="flex gap-4">
                                             <div className="flex items-center space-x-2">

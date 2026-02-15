@@ -28,6 +28,7 @@ interface Student {
     payments?: {
         amount: number;
         status: string;
+        due_date: string;
     }[];
 }
 
@@ -41,6 +42,7 @@ export default function AdminStudentsPage() {
     const [selectedMonth, setSelectedMonth] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [coachFilter, setCoachFilter] = useState<string>('all');
+    const [morosoFilter, setMorosoFilter] = useState<boolean>(false);
 
     const supabase = createClient();
 
@@ -69,7 +71,7 @@ export default function AdminStudentsPage() {
                 .select(`
                     *,
                     coach:profiles!assigned_coach_id(full_name),
-                    payments(amount, status)
+                    payments(amount, status, due_date)
                 `)
                 .order('created_at', { ascending: false });
 
@@ -106,11 +108,20 @@ export default function AdminStudentsPage() {
         }
     };
 
-    // Client-side search (Server filter for Date/Status/Coach, Client for Name/Email)
-    const filteredStudents = students.filter(student =>
-        student.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        student.email?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Client-side search and moroso filter
+    const filteredStudents = students.filter(student => {
+        const matchesSearch = (
+            student.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            student.email?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+        const isOverdue = student.payments?.some(p =>
+            p.status === 'pending' && new Date(p.due_date) < new Date()
+        );
+
+        if (morosoFilter && !isOverdue) return false;
+        return matchesSearch;
+    });
 
     const getPaymentProgress = (student: Student) => {
         const totalAgreed = student.agreed_price || 0;
@@ -226,6 +237,18 @@ export default function AdminStudentsPage() {
                                     <option value="paused">Pausado</option>
                                 </select>
                             </div>
+
+                            {/* Moroso Filter */}
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant={morosoFilter ? 'destructive' : 'outline'}
+                                    size="sm"
+                                    className="h-9"
+                                    onClick={() => setMorosoFilter(!morosoFilter)}
+                                >
+                                    Morosos
+                                </Button>
+                            </div>
                         </div>
 
                         {/* Search */}
@@ -266,8 +289,15 @@ export default function AdminStudentsPage() {
                                     ) : (
                                         filteredStudents.map((student) => {
                                             const progress = getPaymentProgress(student);
+                                            const isOverdue = student.payments?.some(p =>
+                                                p.status === 'pending' && new Date(p.due_date) < new Date()
+                                            );
+
                                             return (
-                                                <TableRow key={student.id}>
+                                                <TableRow
+                                                    key={student.id}
+                                                    className={isOverdue ? 'bg-red-50/50 hover:bg-red-50' : ''}
+                                                >
                                                     <TableCell className="font-medium">{student.full_name}</TableCell>
                                                     <TableCell>{student.email}</TableCell>
                                                     <TableCell>
@@ -295,7 +325,16 @@ export default function AdminStudentsPage() {
                                                             </div>
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell>{getStatusBadge(student.status)}</TableCell>
+                                                    <TableCell>
+                                                        <div className="flex flex-col gap-1">
+                                                            {getStatusBadge(student.status)}
+                                                            {isOverdue && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-800 border border-red-200">
+                                                                    Moroso
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex justify-end gap-2">
                                                             <StudentPaymentDetails student={student} />
