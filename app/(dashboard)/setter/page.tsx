@@ -28,7 +28,7 @@ export default async function SetterDashboard() {
             <DashboardAlertCards role="setter" />
 
             {/* Generated vs Paid Chart */}
-            <div className="w-full">
+            <div className="w-full max-w-5xl">
                 <CommissionChart data={chartData} />
             </div>
         </div>

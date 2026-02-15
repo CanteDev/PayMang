@@ -53,7 +53,7 @@ export default async function CoachDashboard() {
             </div>
 
             {/* Generated vs Paid Chart */}
-            <div className="w-full">
+            <div className="w-full max-w-5xl">
                 <CommissionChart data={chartData} />
             </div>
         </div>

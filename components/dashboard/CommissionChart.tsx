@@ -30,7 +30,7 @@ export default function CommissionChart({ data }: CommissionChartProps) {
                 <p className="text-sm text-gray-500">Generado (Pendiente) vs Pagado por mes</p>
             </CardHeader>
             <CardContent className="pl-2">
-                <div className="h-[350px] w-full max-w-5xl mx-auto">
+                <div className="h-[350px] w-full max-w-4xl mx-auto">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart
                             data={data}
@@ -62,19 +62,19 @@ export default function CommissionChart({ data }: CommissionChartProps) {
                                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                             />
                             <Legend />
-                            {/* Bar 1: Paid (Green/Blue) */}
+                            {/* Bar 1: Paid (Blue) */}
                             <Bar
                                 dataKey="paid"
                                 name="Pagado"
-                                fill="#22c55e" // Green-500
+                                fill="#3b82f6" // Blue
                                 radius={[4, 4, 0, 0]}
                                 barSize={40}
                             />
-                            {/* Bar 2: Pending (Gray/Blue) */}
+                            {/* Bar 2: Pending (Red) */}
                             <Bar
-                                dataKey="generated" // Note: In logic generated is usually total, here it seems to be used as pending? Let's check logic later but for visual separation:
+                                dataKey="generated"
                                 name="Pendiente"
-                                fill="#cbd5e1" // Slate-300
+                                fill="#fca5a5" // Light Red
                                 radius={[4, 4, 0, 0]}
                                 barSize={40}
                             />
