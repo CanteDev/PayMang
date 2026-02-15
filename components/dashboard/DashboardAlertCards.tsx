@@ -61,7 +61,7 @@ export default function DashboardAlertCards({ role }: DashboardAlertCardsProps) 
                             Comisiones validadas listas para pagar
                         </p>
                         <Button asChild variant="link" className="px-0 text-blue-600 h-auto mt-2">
-                            <Link href="/admin/payslips" className="flex items-center gap-1">
+                            <Link href="/admin/payslips?status=validated" className="flex items-center gap-1">
                                 Ir a Liquidaciones <ArrowRight className="h-3 w-3" />
                             </Link>
                         </Button>
@@ -83,7 +83,7 @@ export default function DashboardAlertCards({ role }: DashboardAlertCardsProps) 
                             Requieren revisión y resolución
                         </p>
                         <Button asChild variant="link" className="px-0 text-yellow-600 h-auto mt-2">
-                            <Link href="/admin/incidences" className="flex items-center gap-1">
+                            <Link href="/admin/payslips?status=incidence" className="flex items-center gap-1">
                                 Gestionar Incidencias <ArrowRight className="h-3 w-3" />
                             </Link>
                         </Button>
