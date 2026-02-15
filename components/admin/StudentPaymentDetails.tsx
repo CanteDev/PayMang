@@ -214,7 +214,10 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                                             value={newMethod}
                                             onChange={e => setNewMethod(e.target.value)}
                                         >
-                                            <option value="transfer">Transferencia Bancaria</option>
+                                            <option value="transfer">Transf. Bancaria</option>
+                                            <option value="stripe">Stripe</option>
+                                            <option value="hotmart">Hotmart</option>
+                                            <option value="sequra">Sequra</option>
                                             <option value="cash">Efectivo</option>
                                             <option value="other">Otro</option>
                                         </select>
@@ -298,7 +301,7 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
 
                                     {payment.method && (
                                         <p className="text-xs text-gray-400 capitalize">
-                                            {payment.method === 'transfer' ? 'Transferencia' : payment.method}
+                                            {payment.method === 'transfer' ? 'Transf. Bancaria' : payment.method}
                                         </p>
                                     )}
                                 </div>
