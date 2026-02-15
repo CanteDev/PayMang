@@ -21,6 +21,7 @@ interface AlertCounts {
     pendingPayouts?: number;
     newIncidences?: number;
     pendingValidations?: number;
+    overduePayments?: number;
 }
 
 interface DashboardAlertCardsProps {
@@ -109,6 +110,27 @@ export default function DashboardAlertCards({ role }: DashboardAlertCardsProps) 
                         <Button asChild variant="link" className="px-0 text-orange-600 h-auto mt-2">
                             <Link href={`/${role}/commissions`} className="flex items-center gap-1">
                                 Validar ahora <ArrowRight className="h-3 w-3" />
+                            </Link>
+                        </Button>
+                    </CardContent>
+                </Card>
+            )}
+            {role === 'admin' && counts.overduePayments! > 0 && (
+                <Card className="bg-red-50 border-red-200">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                        <CardTitle className="text-sm font-medium text-red-900">
+                            Pagos Vencidos / Morosos
+                        </CardTitle>
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-red-900">{counts.overduePayments}</div>
+                        <p className="text-xs text-red-700 mt-1">
+                            Alumnos con cuotas atrasadas
+                        </p>
+                        <Button asChild variant="link" className="px-0 text-red-600 h-auto mt-2">
+                            <Link href="/admin/students?status=all" className="flex items-center gap-1">
+                                Ver Alumnos <ArrowRight className="h-3 w-3" />
                             </Link>
                         </Button>
                     </CardContent>

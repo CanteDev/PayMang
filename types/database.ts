@@ -41,6 +41,27 @@ export interface Student {
     closer_id: string | null;
     setter_id: string | null;
     external_data: Record<string, any>;
+    // New fields for installments
+    pack_id: string | null;
+    payment_method: 'upfront' | 'installments';
+    total_installments: number;
+    installment_amount: number;
+    installment_period: number;
+    start_date: string;
+    agreed_price: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface Payment {
+    id: string;
+    student_id: string;
+    amount: number;
+    status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'overdue';
+    due_date: string;
+    paid_at: string | null;
+    method: 'stripe' | 'hotmart' | 'transfer' | 'cash' | 'other' | null;
+    notes: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -71,7 +92,8 @@ export interface Sale {
 
 export interface Commission {
     id: string;
-    sale_id: string;
+    sale_id?: string; // Optional now as it might link to Payments later? Keeping for compatibility
+    payment_id?: string; // Future proofing
     agent_id: string;
     role_at_sale: string;
     amount: number;
@@ -155,6 +177,11 @@ export interface Database {
                 Row: Student;
                 Insert: Omit<Student, 'id' | 'created_at' | 'updated_at'>;
                 Update: Partial<Omit<Student, 'id' | 'created_at' | 'updated_at'>>;
+            };
+            payments: {
+                Row: Payment;
+                Insert: Omit<Payment, 'id' | 'created_at' | 'updated_at'>;
+                Update: Partial<Omit<Payment, 'id' | 'created_at' | 'updated_at'>>;
             };
             sales: {
                 Row: Sale;

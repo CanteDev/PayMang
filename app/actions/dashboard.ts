@@ -258,6 +258,7 @@ export async function getAlertCounts() {
         pendingPayouts?: number;
         newIncidences?: number;
         pendingValidations?: number;
+        overduePayments?: number;
     } = {};
 
     const role = (profile as any).role;
@@ -273,8 +274,16 @@ export async function getAlertCounts() {
             .select('*', { count: 'exact', head: true })
             .eq('status', 'incidence');
 
+        // Count Overdue Payments
+        const today = new Date().toISOString().split('T')[0];
+        const { count: overdueCount } = await (supabase
+            .from('payments') as any) // Use any if payments not yet in types fully
+            .select('*', { count: 'exact', head: true })
+            .or(`status.eq.overdue,and(status.eq.pending,due_date.lt.${today})`);
+
         results.pendingPayouts = validatedCount || 0;
         results.newIncidences = incidenceCount || 0;
+        results.overduePayments = overdueCount || 0;
     } else {
         const { count: pendingCount } = await supabase
             .from('commissions')

@@ -25,6 +25,13 @@ interface StudentFormProps {
         closer_id: string | null;
         setter_id: string | null;
         status: string;
+        // Optional fields for old records compatibility
+        pack_id?: string | null;
+        payment_method?: 'upfront' | 'installments';
+        total_installments?: number;
+        installment_amount?: number;
+        installment_period?: number;
+        start_date?: string;
     };
     onSuccess?: (student?: any) => void;
     trigger?: React.ReactNode;
@@ -43,9 +50,18 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
     const [setterId, setSetterId] = useState(student?.setter_id || '');
     const [status, setStatus] = useState(student?.status || 'active');
 
+    // New Fields for Installments
+    const [packId, setPackId] = useState(student?.pack_id || '');
+    const [paymentMethod, setPaymentMethod] = useState<'upfront' | 'installments'>(student?.payment_method || 'upfront');
+    const [totalInstallments, setTotalInstallments] = useState(student?.total_installments || 1);
+    const [installmentAmount, setInstallmentAmount] = useState(student?.installment_amount || 0);
+    const [installmentPeriod, setInstallmentPeriod] = useState(student?.installment_period || 1);
+    const [startDate, setStartDate] = useState(student?.start_date || new Date().toISOString().split('T')[0]);
+
     const [coaches, setCoaches] = useState<any[]>([]);
     const [closers, setClosers] = useState<any[]>([]);
     const [setters, setSetters] = useState<any[]>([]);
+    const [packs, setPacks] = useState<any[]>([]);
 
     const supabase = createClient();
 
@@ -54,8 +70,19 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
             loadCoaches();
             loadClosers();
             loadSetters();
+            loadPacks();
         }
     }, [open]);
+
+    const loadPacks = async () => {
+        const { data } = await supabase
+            .from('packs')
+            .select('id, name, price')
+            .eq('is_active', true)
+            .order('price');
+
+        if (data) setPacks(data);
+    };
 
     const loadCoaches = async () => {
         const { data } = await supabase
@@ -90,6 +117,17 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
         if (data) setSetters(data);
     };
 
+    // Auto-calculate installment amount if pack changes and is upfront
+    useEffect(() => {
+        if (packId && paymentMethod === 'upfront') {
+            const pack = packs.find(p => p.id === packId);
+            if (pack) {
+                setInstallmentAmount(pack.price);
+                setTotalInstallments(1);
+            }
+        }
+    }, [packId, paymentMethod, packs]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -104,6 +142,14 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                 closer_id: closerId || null,
                 setter_id: setterId || null,
                 status,
+                // New Fields
+                pack_id: packId || null,
+                payment_method: paymentMethod,
+                total_installments: paymentMethod === 'installments' ? Number(totalInstallments) : 1,
+                installment_amount: Number(installmentAmount),
+                installment_period: paymentMethod === 'installments' ? Number(installmentPeriod) : 1,
+                start_date: startDate,
+                agreed_price: paymentMethod === 'upfront' ? Number(installmentAmount) : (Number(installmentAmount) * Number(totalInstallments))
             };
 
             let resultStudent = null;
@@ -143,6 +189,12 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                 setCloserId('');
                 setSetterId('');
                 setStatus('active');
+                setPackId('');
+                setPaymentMethod('upfront');
+                setTotalInstallments(1);
+                setInstallmentAmount(0);
+                setInstallmentPeriod(1);
+                setStartDate(new Date().toISOString().split('T')[0]);
             }
         } catch (err: any) {
             console.error('Error guardando estudiante:', err);
@@ -171,7 +223,7 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent id="student-form-content" className="sm:max-w-[500px]">
+            <DialogContent id="student-form-content" className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>
                         {student ? 'Editar Alumno' : 'Crear Nuevo Alumno'}
@@ -259,6 +311,110 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                                 </option>
                             ))}
                         </select>
+                    </div>
+
+                    {/* Pack & Payment Config */}
+                    <div className="pt-4 border-t border-gray-100">
+                        <h4 className="text-sm font-semibold mb-3">Configuración de Pago</h4>
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="pack">Pack Seleccionado</Label>
+                                <select
+                                    id="pack"
+                                    value={packId}
+                                    onChange={(e) => setPackId(e.target.value)}
+                                    className="w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
+                                    disabled={loading}
+                                >
+                                    <option value="">-- Seleccionar Pack --</option>
+                                    {packs.map(pack => (
+                                        <option key={pack.id} value={pack.id}>
+                                            {pack.name} ({pack.price}€)
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {packId && (
+                                <>
+                                    <div className="space-y-2">
+                                        <Label>Modalidad de Pago</Label>
+                                        <div className="flex gap-4">
+                                            <div className="flex items-center space-x-2">
+                                                <input
+                                                    type="radio"
+                                                    id="upfront"
+                                                    name="paymentMethod"
+                                                    value="upfront"
+                                                    checked={paymentMethod === 'upfront'}
+                                                    onChange={() => setPaymentMethod('upfront')}
+                                                    className="w-4 h-4 text-primary-600"
+                                                />
+                                                <Label htmlFor="upfront" className="font-normal">Pago Único</Label>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <input
+                                                    type="radio"
+                                                    id="installments"
+                                                    name="paymentMethod"
+                                                    value="installments"
+                                                    checked={paymentMethod === 'installments'}
+                                                    onChange={() => setPaymentMethod('installments')}
+                                                    className="w-4 h-4 text-primary-600"
+                                                />
+                                                <Label htmlFor="installments" className="font-normal">Cuotas</Label>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {paymentMethod === 'installments' && (
+                                        <div className="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded-lg">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="numInstallments">Nº Cuotas</Label>
+                                                <Input
+                                                    id="numInstallments"
+                                                    type="number"
+                                                    min="1"
+                                                    value={totalInstallments}
+                                                    onChange={(e) => setTotalInstallments(Number(e.target.value))}
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="period">Periodicidad (meses)</Label>
+                                                <Input
+                                                    id="period"
+                                                    type="number"
+                                                    min="1"
+                                                    value={installmentPeriod}
+                                                    onChange={(e) => setInstallmentPeriod(Number(e.target.value))}
+                                                    placeholder="1 = Mensual"
+                                                />
+                                            </div>
+                                            <div className="space-y-2 col-span-2">
+                                                <Label htmlFor="amount">Importe por Cuota (€)</Label>
+                                                <Input
+                                                    id="amount"
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={installmentAmount}
+                                                    onChange={(e) => setInstallmentAmount(Number(e.target.value))}
+                                                />
+                                            </div>
+                                            <div className="space-y-2 col-span-2">
+                                                <Label htmlFor="start">Fecha Inicio Pagos</Label>
+                                                <Input
+                                                    id="start"
+                                                    type="date"
+                                                    value={startDate}
+                                                    onChange={(e) => setStartDate(e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     <div className="space-y-2">

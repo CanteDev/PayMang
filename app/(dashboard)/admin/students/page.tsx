@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Users, Search, User, Filter, Calendar, Edit2 } from 'lucide-react';
 import StudentForm from '@/components/admin/StudentForm';
+import StudentPaymentDetails from '@/components/admin/StudentPaymentDetails';
 
 interface Student {
     id: string;
@@ -22,6 +23,12 @@ interface Student {
         full_name: string;
     };
     created_at: string;
+    // Payment info
+    agreed_price: number;
+    payments?: {
+        amount: number;
+        status: string;
+    }[];
 }
 
 export default function AdminStudentsPage() {
@@ -61,7 +68,8 @@ export default function AdminStudentsPage() {
                 .from('students')
                 .select(`
                     *,
-                    coach:profiles!assigned_coach_id(full_name)
+                    coach:profiles!assigned_coach_id(full_name),
+                    payments(amount, status)
                 `)
                 .order('created_at', { ascending: false });
 
@@ -90,7 +98,7 @@ export default function AdminStudentsPage() {
             const { data, error } = await query;
 
             if (error) throw error;
-            setStudents(data || []);
+            setStudents(data as any || []);
         } catch (error) {
             console.error('Error loading students:', error);
         } finally {
@@ -104,16 +112,32 @@ export default function AdminStudentsPage() {
         student.email?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const getPaymentProgress = (student: Student) => {
+        const totalAgreed = student.agreed_price || 0;
+        if (totalAgreed === 0) return { paid: 0, total: 0, percentage: 0 };
+
+        const paid = student.payments
+            ?.filter(p => p.status === 'paid')
+            .reduce((sum, p) => sum + p.amount, 0) || 0;
+
+        const percentage = Math.min(100, Math.round((paid / totalAgreed) * 100));
+        return { paid, total: totalAgreed, percentage };
+    };
+
     const getStatusBadge = (status: string) => {
         const styles = {
             active: 'bg-green-100 text-green-700',
             inactive: 'bg-gray-100 text-gray-700',
             paused: 'bg-yellow-100 text-yellow-700',
+            finished: 'bg-blue-100 text-blue-700',
+            defaulted: 'bg-red-100 text-red-700',
         };
         const labels = {
             active: 'Activo',
             inactive: 'Inactivo',
             paused: 'Pausado',
+            finished: 'Finalizado',
+            defaulted: 'Impago',
         };
         return (
             <span className={`px-2 py-1 rounded-md text-xs font-medium ${styles[status as keyof typeof styles] || 'bg-gray-100 text-gray-700'}`}>
@@ -226,51 +250,69 @@ export default function AdminStudentsPage() {
                                     <TableRow className="bg-gray-50">
                                         <TableHead>Nombre</TableHead>
                                         <TableHead>Email</TableHead>
-                                        <TableHead>Coach Asignado</TableHead>
+                                        <TableHead>Coach</TableHead>
+                                        <TableHead>Progreso Pago</TableHead>
                                         <TableHead>Estado</TableHead>
-                                        <TableHead>Fecha Registro</TableHead>
                                         <TableHead className="text-right">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {filteredStudents.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                                            <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                                                 No se encontraron alumnos con estos filtros
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        filteredStudents.map((student) => (
-                                            <TableRow key={student.id}>
-                                                <TableCell className="font-medium">{student.full_name}</TableCell>
-                                                <TableCell>{student.email}</TableCell>
-                                                <TableCell>
-                                                    {student.coach?.full_name ? (
-                                                        <div className="flex items-center space-x-2">
-                                                            <User className="w-4 h-4 text-gray-400" />
-                                                            <span>{student.coach.full_name}</span>
+                                        filteredStudents.map((student) => {
+                                            const progress = getPaymentProgress(student);
+                                            return (
+                                                <TableRow key={student.id}>
+                                                    <TableCell className="font-medium">{student.full_name}</TableCell>
+                                                    <TableCell>{student.email}</TableCell>
+                                                    <TableCell>
+                                                        {student.coach?.full_name ? (
+                                                            <div className="flex items-center space-x-2">
+                                                                <User className="w-4 h-4 text-gray-400" />
+                                                                <span>{student.coach.full_name}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-gray-400 text-sm italic">Sin asignar</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="w-48">
+                                                        <div className="space-y-1">
+                                                            <div className="flex justify-between text-xs text-gray-600">
+                                                                <span>{progress.paid}€ / {progress.total}€</span>
+                                                                <span>{progress.percentage}%</span>
+                                                            </div>
+                                                            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                                <div
+                                                                    className={`h-full rounded-full transition-all duration-500 ${progress.percentage >= 100 ? 'bg-green-500' : 'bg-blue-500'
+                                                                        }`}
+                                                                    style={{ width: `${progress.percentage}%` }}
+                                                                />
+                                                            </div>
                                                         </div>
-                                                    ) : (
-                                                        <span className="text-gray-400 text-sm italic">Sin asignar</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>{getStatusBadge(student.status)}</TableCell>
-                                                <TableCell className="text-gray-500 text-sm">
-                                                    {new Date(student.created_at).toLocaleDateString()}
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    <StudentForm
-                                                        student={student}
-                                                        onSuccess={loadStudents}
-                                                        trigger={
-                                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                                                <Edit2 className="h-4 w-4" />
-                                                            </Button>
-                                                        }
-                                                    />
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
+                                                    </TableCell>
+                                                    <TableCell>{getStatusBadge(student.status)}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            <StudentPaymentDetails student={student} />
+                                                            <StudentForm
+                                                                student={student}
+                                                                onSuccess={loadStudents}
+                                                                trigger={
+                                                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                                                        <Edit2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                }
+                                                            />
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })
                                     )}
                                 </TableBody>
                             </Table>
