@@ -35,7 +35,7 @@ export async function inviteStaff(prevState: any, formData: FormData) {
                 full_name: fullName,
                 role: role,
             },
-            redirectTo: process.env.NEXT_PUBLIC_APP_URL + '/auth/update-password', // Redirect to password set page
+            redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback?next=/update-password`, // Redirect to callback + update page
         });
 
         if (authError) {
@@ -131,7 +131,7 @@ export async function updateStaff(prevState: any, formData: FormData) {
                     full_name: fullName,
                     role: role,
                 },
-                redirectTo: process.env.NEXT_PUBLIC_APP_URL + '/auth/update-password',
+                redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback?next=/update-password`,
             });
 
             if (authError) {

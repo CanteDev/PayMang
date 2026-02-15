@@ -29,7 +29,14 @@ function LoginForm() {
         if (errorMsg) {
             setError(errorMsg);
         }
-    }, [searchParams]);
+
+        // Si venimos de un link de recuperación/invitación que aterrizó por error en el login
+        const code = searchParams.get('code');
+        if (code) {
+            console.log('🔑 Detectado código de recuperación, redirigiendo a callback...');
+            router.push(`/api/auth/callback?code=${code}&next=/update-password`);
+        }
+    }, [searchParams, router]);
 
     const handleLogin = async (e: React.FormEvent) => {
         const supabase = createClient();
