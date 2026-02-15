@@ -171,7 +171,7 @@ const CommissionPayslip = ({ profile, commissions, month }: CommissionPayslipPro
             <Page size="A4" style={styles.page}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <Text style={styles.title}>ANTIGRAVITY</Text>
+                    <Text style={styles.title}>ECOBOMB</Text>
                     <Text style={styles.subtitle}>Liquidación de Comisiones</Text>
                 </View>
 

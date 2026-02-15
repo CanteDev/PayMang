@@ -1,5 +1,6 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,6 +79,7 @@ interface CommissionTableProps {
 }
 
 export default function CommissionTable({ userRole, userId }: CommissionTableProps) {
+    const searchParams = useSearchParams();
     const [commissions, setCommissions] = useState<Commission[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -110,6 +112,14 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
     useEffect(() => {
         setPage(1);
     }, [statusFilter, agentFilter, selectedMonth, searchTerm]);
+
+    // Update status filter if URL changes
+    useEffect(() => {
+        const paramStatus = searchParams.get('status');
+        if (paramStatus) {
+            setStatusFilter(paramStatus);
+        }
+    }, [searchParams]);
 
     // Load data on filter/page change
     useEffect(() => {

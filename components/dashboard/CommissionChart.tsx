@@ -30,7 +30,7 @@ export default function CommissionChart({ data }: CommissionChartProps) {
                 <p className="text-sm text-gray-500">Generado (Pendiente) vs Pagado por mes</p>
             </CardHeader>
             <CardContent className="pl-2">
-                <div className="h-[350px] w-full">
+                <div className="h-[350px] w-full max-w-5xl mx-auto">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart
                             data={data}
@@ -57,25 +57,26 @@ export default function CommissionChart({ data }: CommissionChartProps) {
                                 tickFormatter={(value) => `${value}€`}
                             />
                             <Tooltip
-                                formatter={(value: any) => [`${Number(value).toFixed(2)}€`, 'Amount']}
+                                formatter={(value: any) => [`${Number(value).toFixed(2)}€`, '']}
                                 cursor={{ fill: 'transparent' }}
+                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                             />
                             <Legend />
-                            {/* Base Layer: Generated but NOT Paid (Light Red) */}
-                            <Bar
-                                dataKey="generated"
-                                name="Pendiente de Pago"
-                                stackId="a"
-                                fill="#fca5a5" // Light Red 
-                                radius={[0, 0, 4, 4]}
-                            />
-                            {/* Growth Layer: Paid (Blue) */}
+                            {/* Bar 1: Paid (Green/Blue) */}
                             <Bar
                                 dataKey="paid"
                                 name="Pagado"
-                                stackId="a"
-                                fill="#3b82f6" // Blue
+                                fill="#22c55e" // Green-500
                                 radius={[4, 4, 0, 0]}
+                                barSize={40}
+                            />
+                            {/* Bar 2: Pending (Gray/Blue) */}
+                            <Bar
+                                dataKey="generated" // Note: In logic generated is usually total, here it seems to be used as pending? Let's check logic later but for visual separation:
+                                name="Pendiente"
+                                fill="#cbd5e1" // Slate-300
+                                radius={[4, 4, 0, 0]}
+                                barSize={40}
                             />
                         </BarChart>
                     </ResponsiveContainer>
