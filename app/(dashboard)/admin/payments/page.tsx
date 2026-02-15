@@ -8,13 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DollarSign, Search, CreditCard, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 
-interface Sale {
+interface Transaction {
     id: string;
-    total_amount: number;
-    amount_collected: number;
+    amount: number;
     gateway: string;
     status: string;
     created_at: string;
+    type: 'sale' | 'manual';
     student?: {
         full_name: string;
         email: string;
@@ -25,7 +25,7 @@ interface Sale {
 }
 
 export default function AdminPaymentsPage() {
-    const [sales, setSales] = useState<Sale[]>([]);
+    const [sales, setSales] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [gatewayFilter, setGatewayFilter] = useState('all');
@@ -51,7 +51,7 @@ export default function AdminPaymentsPage() {
         setLoading(true);
         try {
             let query = supabase
-                .from('sales')
+                .from('all_transactions')
                 .select(`
                     *,
                     student:students(full_name, email),
@@ -61,7 +61,11 @@ export default function AdminPaymentsPage() {
 
             // Server-side filter
             if (gatewayFilter !== 'all') {
-                query = query.eq('gateway', gatewayFilter);
+                if (gatewayFilter === 'manual') {
+                    query = query.eq('type', 'manual');
+                } else {
+                    query = query.eq('gateway', gatewayFilter);
+                }
             }
 
             // Pagination
@@ -72,7 +76,7 @@ export default function AdminPaymentsPage() {
             const { data, error, count } = await query;
 
             if (error) throw error;
-            setSales(data || []);
+            setSales(data as any || []);
             setTotalCount(count || 0);
         } catch (error) {
             console.error('Error loading sales:', error);
@@ -232,16 +236,19 @@ export default function AdminPaymentsPage() {
                                                 <TableCell>{getGatewayBadge(sale.gateway)}</TableCell>
                                                 <TableCell>{getStatusBadge(sale.status)}</TableCell>
                                                 <TableCell className="text-right font-medium">
-                                                    {sale.total_amount?.toFixed(2)}€
+                                                    {sale.amount?.toFixed(2)}€
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    {(sale.status === 'completed' || sale.status === 'paid') && isRefundable(sale.created_at) && (
+                                                    {sale.type === 'sale' && (sale.status === 'completed' || sale.status === 'paid') && isRefundable(sale.created_at) && (
                                                         <button
                                                             onClick={() => handleRefund(sale.id)}
                                                             className="text-xs text-red-600 hover:text-red-800 font-medium underline"
                                                         >
                                                             Reembolsar
                                                         </button>
+                                                    )}
+                                                    {sale.type === 'manual' && (
+                                                        <span className="text-xs text-gray-400 italic">Manual</span>
                                                     )}
                                                 </TableCell>
                                             </TableRow>
