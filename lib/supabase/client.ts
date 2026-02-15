@@ -20,6 +20,14 @@ export function createClient() {
         );
     }
 
+    if (typeof window !== 'undefined') {
+        console.log('🔍 DEBUG SUPABASE CONFIG:', {
+            url: supabaseUrl,
+            keyStart: supabaseAnonKey?.substring(0, 5) + '...',
+            keyLength: supabaseAnonKey?.length
+        });
+    }
+
     return createBrowserClient<Database>(
         supabaseUrl,
         supabaseAnonKey
