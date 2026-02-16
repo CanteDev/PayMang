@@ -14,14 +14,9 @@ interface Transaction {
     gateway: string;
     status: string;
     created_at: string;
-    type: 'sale' | 'manual';
-    student?: {
-        full_name: string;
-        email: string;
-    };
-    pack?: {
-        name: string;
-    };
+    student_name?: string;
+    student_email?: string;
+    pack_name?: string;
 }
 
 export default function AdminPaymentsPage() {
@@ -52,11 +47,7 @@ export default function AdminPaymentsPage() {
         try {
             let query = supabase
                 .from('all_transactions')
-                .select(`
-                    *,
-                    student:students(full_name, email),
-                    pack:packs(name)
-                `, { count: 'exact' })
+                .select('*', { count: 'exact' })
                 .order('created_at', { ascending: false });
 
             // Server-side filter
@@ -228,11 +219,11 @@ export default function AdminPaymentsPage() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex flex-col">
-                                                        <span className="font-medium">{sale.student?.full_name}</span>
-                                                        <span className="text-xs text-gray-500">{sale.student?.email}</span>
+                                                        <span className="font-medium">{sale.student_name}</span>
+                                                        <span className="text-xs text-gray-500">{sale.student_email}</span>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>{sale.pack?.name}</TableCell>
+                                                <TableCell>{sale.pack_name || '-'}</TableCell>
                                                 <TableCell>{getGatewayBadge(sale.gateway)}</TableCell>
                                                 <TableCell>{getStatusBadge(sale.status)}</TableCell>
                                                 <TableCell className="text-right font-medium">
