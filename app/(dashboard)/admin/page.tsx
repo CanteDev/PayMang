@@ -11,10 +11,9 @@ import { getDashboardMetrics, getCommissionChartData } from '@/app/actions/dashb
 export default async function AdminDashboard({
     searchParams,
 }: {
-    searchParams: { from?: string; to?: string };
+    searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-    const from = searchParams.from || '';
-    const to = searchParams.to || '';
+    const { from = '', to = '' } = await searchParams;
 
     const supabase = await createClient();
 
