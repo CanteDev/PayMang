@@ -33,6 +33,7 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [payments, setPayments] = useState<Payment[]>([]);
+    const [totalPaidFromTransactions, setTotalPaidFromTransactions] = useState(0);
 
     // Manual Payment Form
     const [showAddPayment, setShowAddPayment] = useState(false);
@@ -52,13 +53,26 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
 
     const loadPayments = async () => {
         setLoading(true);
-        const { data } = await supabase
+
+        // 1. Fetch installments (all from payments table)
+        const { data: paymentsData } = await supabase
             .from('payments')
             .select('*')
             .eq('student_id', student.id)
             .order('due_date', { ascending: true });
 
-        if (data) setPayments(data);
+        if (paymentsData) setPayments(paymentsData);
+
+        // 2. Fetch total paid from all_transactions (Sales + Manual)
+        const { data: transData } = await supabase
+            .from('all_transactions')
+            .select('amount')
+            .eq('student_id', student.id)
+            .eq('status', 'paid');
+
+        const total = (transData as any[] || []).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+        setTotalPaidFromTransactions(total);
+
         setLoading(false);
     };
 
@@ -109,13 +123,12 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
     };
 
     // Calculate totals
-    const totalPaid = payments
-        .filter(p => p.status === 'paid')
-        .reduce((sum, p) => sum + p.amount, 0);
+    const totalPaid = totalPaidFromTransactions;
 
-    const totalPending = payments
-        .filter(p => p.status === 'pending')
-        .reduce((sum, p) => sum + p.amount, 0);
+    // Pending is Agreed Price - Total Paid
+    const totalPending = Math.max(0, student.agreed_price - totalPaid);
+
+    // Overdue: Only from installments (payments table)
 
     const totalOverdue = payments
         .filter(p => p.status === 'overdue' || (p.status === 'pending' && new Date(p.due_date) < new Date()))

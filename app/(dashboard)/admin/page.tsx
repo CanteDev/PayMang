@@ -5,9 +5,17 @@ import CommissionTable from '@/components/dashboard/CommissionTable';
 import DashboardMetricsCards from '@/components/dashboard/DashboardMetricsCards';
 import CommissionChart from '@/components/dashboard/CommissionChart';
 import DashboardAlertCards from '@/components/dashboard/DashboardAlertCards';
+import DashboardFilters from '@/components/dashboard/DashboardFilters';
 import { getDashboardMetrics, getCommissionChartData } from '@/app/actions/dashboard';
 
-export default async function AdminDashboard() {
+export default async function AdminDashboard({
+    searchParams,
+}: {
+    searchParams: { from?: string; to?: string };
+}) {
+    const from = searchParams.from || '';
+    const to = searchParams.to || '';
+
     const supabase = await createClient();
 
     const {
@@ -18,8 +26,8 @@ export default async function AdminDashboard() {
         redirect('/login');
     }
 
-    // Fetch Financial Metrics & Chart Data
-    const metrics = await getDashboardMetrics();
+    // Fetch Financial Metrics & Chart Data with date filtering
+    const metrics = await getDashboardMetrics(from, to);
     const chartData = await getCommissionChartData();
 
     return (
@@ -31,6 +39,9 @@ export default async function AdminDashboard() {
 
             {/* Critical Alerts */}
             <DashboardAlertCards role="admin" />
+
+            {/* Date Range Filters */}
+            <DashboardFilters />
 
             {/* Financial Metrics Cards */}
             <DashboardMetricsCards metrics={metrics} />

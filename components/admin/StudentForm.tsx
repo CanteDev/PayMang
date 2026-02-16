@@ -276,6 +276,18 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                     </div>
 
                     <div className="space-y-2">
+                        <Label htmlFor="startDate">Fecha de Inscripción *</Label>
+                        <Input
+                            id="startDate"
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            required
+                        />
+                        <p className="text-xs text-gray-500">A partir de esta fecha se calculará la morosidad.</p>
+                    </div>
+
+                    <div className="space-y-2">
                         <Label htmlFor="coach">Coach Asignado</Label>
                         <select
                             id="coach"
@@ -390,13 +402,9 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                                                 />
                                             </div>
                                             <div className="space-y-2 col-span-2">
-                                                <Label htmlFor="start">Fecha Inicio Pagos</Label>
-                                                <Input
-                                                    id="start"
-                                                    type="date"
-                                                    value={startDate}
-                                                    onChange={(e) => setStartDate(e.target.value)}
-                                                />
+                                                <p className="text-sm text-gray-500">
+                                                    Las cuotas se generarán a partir de la fecha de inscripción.
+                                                </p>
                                             </div>
                                         </div>
                                     )}

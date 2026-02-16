@@ -4,14 +4,19 @@ import { createClient } from '@/lib/supabase/server';
 import { CommissionStatus, UserRole } from '@/config/app.config';
 import { revalidatePath } from 'next/cache';
 
-export async function getDashboardMetrics() {
+export async function getDashboardMetrics(startDate?: string, endDate?: string) {
     const supabase = await createClient();
 
     // 1. Total Revenue (Gross): Sum of all transactions (Sales + Manual)
-    const { data: transactionsData, error: transError } = await supabase
+    let query = supabase
         .from('all_transactions')
         .select('amount')
         .eq('status', 'paid');
+
+    if (startDate) query = query.gte('created_at', startDate);
+    if (endDate) query = query.lte('created_at', endDate);
+
+    const { data: transactionsData, error: transError } = await query;
 
     if (transError) {
         console.error('Error fetching transactions:', transError);
@@ -29,9 +34,14 @@ export async function getDashboardMetrics() {
     const totalRevenue = (transactionsData as any[]).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
     // 2. Paid Commissions: Sum of all PAID commissions
-    const { data: commissionsData, error: commissionsError } = await supabase
+    let commQuery = supabase
         .from('commissions')
-        .select('amount, status');
+        .select('amount, status, paid_at, created_at');
+
+    if (startDate) commQuery = commQuery.gte('created_at', startDate);
+    if (endDate) commQuery = commQuery.lte('created_at', endDate);
+
+    const { data: commissionsData, error: commissionsError } = await commQuery;
 
     if (commissionsError) {
         console.error('Error fetching commissions:', commissionsError);
@@ -139,64 +149,66 @@ export async function getDashboardMetrics() {
 export async function getCommissionChartData(userId?: string) {
     const supabase = await createClient();
 
-    // Calculate range: last 6 months
+    // Range: 3 months back, Current, 3 months forward = 7 months total
     const now = new Date();
-    const monthsToShow = 6;
-    const chartData: { month: string; generated: number; paid: number; sortKey: string }[] = [];
+    const chartData: { month: string; generated: number; paid: number; planned: number; sortKey: string }[] = [];
 
-    // Initialize the last 6 months with 0s
-    for (let i = monthsToShow - 1; i >= 0; i--) {
-        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    for (let i = -3; i <= 3; i++) {
+        const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
         const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-        // Locale 'es-ES' for Spanish months
         const label = date.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
 
         chartData.push({
             month: label,
             generated: 0,
             paid: 0,
+            planned: 0,
             sortKey: monthKey
         });
     }
 
-    const startDate = new Date(now.getFullYear(), now.getMonth() - (monthsToShow - 1), 1).toISOString();
+    const startWindow = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString();
+    const endWindow = new Date(now.getFullYear(), now.getMonth() + 4, 0).toISOString(); // End of +3 month
 
-    let query = supabase
+    // 1. Get Commissions (Past & Current)
+    let commQuery = supabase
         .from('commissions')
-        .select(`
-            amount, 
-            status, 
-            created_at, 
-            paid_at,
-            sale:sales(id),
-            payment:payments(id)
-        `)
-        .gte('created_at', startDate)
-        .order('created_at', { ascending: true });
+        .select('amount, status, created_at')
+        .gte('created_at', startWindow)
+        .lte('created_at', endWindow);
 
-    if (userId) {
-        query = query.eq('agent_id', userId);
-    }
+    if (userId) commQuery = commQuery.eq('agent_id', userId);
 
-    const { data: commissions, error } = await query;
+    const { data: commissions } = await commQuery;
 
-    if (error) {
-        console.error('Error fetching chart data:', error);
-        return chartData.map(({ sortKey, ...rest }) => rest);
-    }
+    // 2. Get Planned Payments (Future & Current)
+    let payQuery = supabase
+        .from('payments')
+        .select('amount, due_date')
+        .in('status', ['pending', 'overdue'])
+        .gte('due_date', startWindow)
+        .lte('due_date', endWindow);
+
+    const { data: plannedPayments } = await payQuery;
 
     // Process commissions
-    (commissions as any[]).forEach(commission => {
-        const date = new Date(commission.created_at);
+    (commissions as any[] || []).forEach(c => {
+        const date = new Date(c.created_at);
         const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+        const entry = chartData.find(d => d.sortKey === monthKey);
+        if (entry) {
+            if (c.status === 'paid') entry.paid += Number(c.amount);
+            else entry.generated += Number(c.amount);
+        }
+    });
 
-        const existingMonth = chartData.find(d => d.sortKey === monthKey);
-        if (existingMonth) {
-            if (commission.status === 'paid') {
-                existingMonth.paid += Number(commission.amount);
-            } else if (['pending', 'validated', 'incidence'].includes(commission.status)) {
-                existingMonth.generated += Number(commission.amount);
-            }
+    // Process planned payments
+    (plannedPayments as any[] || []).forEach(p => {
+        const date = new Date(p.due_date);
+        const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+        const entry = chartData.find(d => d.sortKey === monthKey);
+        if (entry) {
+            entry.planned += Number(p.amount);
         }
     });
 
