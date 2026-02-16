@@ -236,7 +236,7 @@ export default function AdminPaymentsPage() {
                                                 <TableCell>{getGatewayBadge(sale.gateway)}</TableCell>
                                                 <TableCell>{getStatusBadge(sale.status)}</TableCell>
                                                 <TableCell className="text-right font-medium">
-                                                    {sale.amount?.toFixed(2)}€
+                                                    {Number(sale.amount || 0).toFixed(2)}€
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     {sale.type === 'sale' && (sale.status === 'completed' || sale.status === 'paid') && isRefundable(sale.created_at) && (

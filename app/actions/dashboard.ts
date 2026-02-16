@@ -7,17 +7,26 @@ import { revalidatePath } from 'next/cache';
 export async function getDashboardMetrics() {
     const supabase = await createClient();
 
-    // 1. Total Revenue (Gross): Sum of all sales
-    const { data: salesData, error: salesError } = await supabase
-        .from('sales')
-        .select('total_amount, amount_collected');
+    // 1. Total Revenue (Gross): Sum of all transactions (Sales + Manual)
+    const { data: transactionsData, error: transError } = await supabase
+        .from('all_transactions')
+        .select('amount')
+        .eq('status', 'paid');
 
-    if (salesError) {
-        console.error('Error fetching sales:', salesError);
-        return null;
+    if (transError) {
+        console.error('Error fetching transactions:', transError);
+        // Fallback to sales + payments if view doesn't exist yet
+        const { data: salesData } = await supabase.from('sales').select('total_amount').eq('status', 'paid');
+        const { data: paymentsData } = await supabase.from('payments').select('amount').eq('status', 'paid');
+
+        const salesTotal = (salesData as any[] || []).reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
+        const paymentsTotal = (paymentsData as any[] || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+        const totalRevenue = salesTotal + paymentsTotal;
+        return { totalRevenue, netCashFlow: totalRevenue, pendingPayouts: 0, burnRate: 0 };
     }
 
-    const totalRevenue = (salesData as any[]).reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+    const totalRevenue = (transactionsData as any[]).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
     // 2. Paid Commissions: Sum of all PAID commissions
     const { data: commissionsData, error: commissionsError } = await supabase
@@ -154,7 +163,14 @@ export async function getCommissionChartData(userId?: string) {
 
     let query = supabase
         .from('commissions')
-        .select('amount, status, created_at, paid_at')
+        .select(`
+            amount, 
+            status, 
+            created_at, 
+            paid_at,
+            sale:sales(id),
+            payment:payments(id)
+        `)
         .gte('created_at', startDate)
         .order('created_at', { ascending: true });
 

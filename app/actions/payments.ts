@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
+import { calculateCommission } from '@/lib/commissions/calculator';
 
 /**
  * Helper to get Service Role Client
@@ -50,16 +51,18 @@ export async function registerPayment(data: RegisterPaymentData) {
                 status: 'paid',
                 amount: data.amount,
                 paid_at: new Date().toISOString(),
-                due_date: data.date, // Update due_date to when it was actually paid if needed, or keep it? Usually better to keep due_date and use paid_at
                 method: data.method,
                 notes: data.notes
             })
             .eq('id', data.paymentId);
 
         if (error) return { error: error.message };
+
+        // Generate commissions for this payment
+        await generateManualCommissions(adminSupabase, data.studentId, data.amount, data.paymentId, false);
     } else {
         // Create new manual payment
-        const { error } = await adminSupabase
+        const { data: newPayment, error } = await adminSupabase
             .from('payments')
             .insert({
                 student_id: data.studentId,
@@ -69,11 +72,68 @@ export async function registerPayment(data: RegisterPaymentData) {
                 paid_at: new Date().toISOString(),
                 method: data.method,
                 notes: data.notes || 'Pago Manual'
-            });
+            })
+            .select()
+            .single();
 
         if (error) return { error: error.message };
+        if (newPayment) {
+            await generateManualCommissions(adminSupabase, data.studentId, data.amount, newPayment.id, true);
+        }
     }
 
+    revalidatePath('/admin');
     revalidatePath('/admin/students');
+    revalidatePath('/admin/payments');
     return { success: true };
+}
+
+async function generateManualCommissions(supabase: any, studentId: string, amount: number, paymentId: string, isNew: boolean) {
+    // 1. Get student info to find agents
+    const { data: student } = await supabase
+        .from('students')
+        .select('assigned_coach_id, closer_id, setter_id')
+        .eq('id', studentId)
+        .single();
+
+    if (!student) return;
+
+    const commissions: any[] = [];
+
+    // Calculate for Coach
+    if (student.assigned_coach_id) {
+        commissions.push({
+            payment_id: paymentId,
+            agent_id: student.assigned_coach_id,
+            role_at_sale: 'coach',
+            amount: await calculateCommission(amount, 'coach'),
+            status: 'pending'
+        });
+    }
+
+    // Calculate for Closer
+    if (student.closer_id) {
+        commissions.push({
+            payment_id: paymentId,
+            agent_id: student.closer_id,
+            role_at_sale: 'closer',
+            amount: await calculateCommission(amount, 'closer'),
+            status: 'pending'
+        });
+    }
+
+    // Calculate for Setter
+    if (student.setter_id) {
+        commissions.push({
+            payment_id: paymentId,
+            agent_id: student.setter_id,
+            role_at_sale: 'setter',
+            amount: await calculateCommission(amount, 'setter'),
+            status: 'pending'
+        });
+    }
+
+    if (commissions.length > 0) {
+        await supabase.from('commissions').insert(commissions);
+    }
 }
