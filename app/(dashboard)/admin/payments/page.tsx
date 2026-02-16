@@ -25,6 +25,7 @@ export default function AdminPaymentsPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [gatewayFilter, setGatewayFilter] = useState('all');
+    const [error, setError] = useState<string | null>(null);
 
     // Pagination State
     const [page, setPage] = useState(1);
@@ -70,15 +71,25 @@ export default function AdminPaymentsPage() {
             if (error) throw error;
             setSales(data as any || []);
             setTotalCount(count || 0);
-        } catch (error) {
-            console.error('Error loading sales:', error);
+        } catch (err: any) {
+            console.error('Error loading sales:', err);
+            setError(err.message || 'Error al cargar el historial de pagos');
         } finally {
             setLoading(false);
         }
     };
 
-    // Note: Search is currently client-side on the fetched page only.
-    const filteredSales = sales;
+    // Implement search filtering
+    const filteredSales = sales.filter(sale => {
+        if (!searchTerm) return true;
+        const search = searchTerm.toLowerCase();
+        return (
+            sale.student_name?.toLowerCase().includes(search) ||
+            sale.student_email?.toLowerCase().includes(search) ||
+            sale.pack_name?.toLowerCase().includes(search) ||
+            sale.gateway?.toLowerCase().includes(search)
+        );
+    });
 
     const getStatusBadge = (status: string) => {
         const styles = {
@@ -187,6 +198,16 @@ export default function AdminPaymentsPage() {
                             </select>
                         </div>
                     </div>
+
+                    {/* Error Display */}
+                    {error && (
+                        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex justify-between items-center">
+                            <span>{error}</span>
+                            <Button variant="ghost" size="sm" onClick={() => loadSales()} className="h-8 hover:bg-red-100">
+                                Reintentar
+                            </Button>
+                        </div>
+                    )}
 
                     {/* Table */}
                     {loading ? (
