@@ -14,6 +14,7 @@ interface Transaction {
     gateway: string;
     status: string;
     created_at: string;
+    type: 'sale' | 'manual';
     student_name?: string;
     student_email?: string;
     pack_name?: string;
