@@ -1,0 +1,2 @@
+﻿.next/types/app/(dashboard)/admin/incidences/page.ts(2,24): error TS2307: Cannot find module '../../../../../../app/(dashboard)/admin/incidences/page.js' or its corresponding type declarations.
+.next/types/app/(dashboard)/admin/incidences/page.ts(5,29): error TS2307: Cannot find module '../../../../../../app/(dashboard)/admin/incidences/page.js' or its corresponding type declarations.

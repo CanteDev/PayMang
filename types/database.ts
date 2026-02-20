@@ -21,11 +21,23 @@ export interface Pack {
     id: string;
     name: string;
     price: number;
+    description: string | null;
     gateway_ids: {
+        // Direct payment links (new)
+        hotmart_link?: string;
+        stripe_link?: string;
+        sequra_link?: string;
+        // Legacy fields (deprecated, kept for backwards compatibility)
         stripe_prod_id?: string;
         hotmart_prod_id?: string;
         sequra_merchant_id?: string;
+        hotmart?: string;
+        stripe?: string;
+        sequra?: string;
     };
+    commission_closer: number;
+    commission_coach: number;
+    commission_setter: number;
     is_active: boolean;
     created_at: string;
     updated_at: string;

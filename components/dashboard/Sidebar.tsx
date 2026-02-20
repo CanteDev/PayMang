@@ -12,7 +12,8 @@ import {
     UserCog,
     TrendingUp,
     LogOut,
-    Settings
+    Settings,
+    Package
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
@@ -40,6 +41,7 @@ export default function Sidebar({ profile }: SidebarProps) {
                 return [
                     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
                     { href: '/admin/staff', label: 'Equipo', icon: UserCog },
+                    { href: '/admin/packs', label: 'Packs', icon: Package },
                     { href: '/admin/students', label: 'Alumnos', icon: Users },
                     { href: '/admin/payments', label: 'Pagos', icon: DollarSign },
                     { href: '/admin/payslips', label: 'Comisiones', icon: FileText },

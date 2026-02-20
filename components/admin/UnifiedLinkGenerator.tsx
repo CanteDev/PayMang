@@ -156,9 +156,10 @@ export default function UnifiedLinkGenerator() {
             const pack = packs.find(p => p.id === selectedPack);
             if (pack?.gateway_ids) {
                 const gateways = [];
-                if (pack.gateway_ids.stripe_prod_id || pack.gateway_ids.stripe) gateways.push('stripe');
-                if (pack.gateway_ids.hotmart_prod_id || pack.gateway_ids.hotmart) gateways.push('hotmart');
-                if (pack.gateway_ids.sequra_merchant_id || pack.gateway_ids.sequra) gateways.push('sequra');
+                // New: direct payment links
+                if (pack.gateway_ids.stripe_link || pack.gateway_ids.stripe_prod_id || pack.gateway_ids.stripe) gateways.push('stripe');
+                if (pack.gateway_ids.hotmart_link || pack.gateway_ids.hotmart_prod_id || pack.gateway_ids.hotmart) gateways.push('hotmart');
+                if (pack.gateway_ids.sequra_link || pack.gateway_ids.sequra_merchant_id || pack.gateway_ids.sequra) gateways.push('sequra');
 
                 setAvailableGateways(gateways);
                 setSelectedGateway(''); // Reset gateway selection
