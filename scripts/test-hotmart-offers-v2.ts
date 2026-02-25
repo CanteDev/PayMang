@@ -5,7 +5,7 @@ dotenv.config({ path: '.env.local' });
 
 async function main() {
     console.log("Investigating Hotmart Offers API v2...");
-    const hotmart = new HotmartClient();
+    const hotmart = HotmartClient.getInstance();
 
     // First, let's get a product ID to test with
     console.log("\n--- Fetching a product to test ---");

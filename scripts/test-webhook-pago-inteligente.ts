@@ -35,6 +35,11 @@ async function main() {
         }).select().single().then((res: any) => res.data);
     }
 
+    if (!link) {
+        console.error("Link creation failed.");
+        return;
+    }
+
     console.log(`Using Link ID: ${link.id}`);
 
     // Simulate "Pago Inteligente" (Intelligent Installment) Payload

@@ -5,7 +5,7 @@ dotenv.config({ path: '.env.local' });
 
 async function main() {
     console.log("Investigating Hotmart Affiliate API...");
-    const hotmart = new HotmartClient();
+    const hotmart = HotmartClient.getInstance();
 
     // Attempt to hit the affiliate hotlinks endpoint.
     // Sometimes it's on the base URL, sometimes on developers.hotmart.com

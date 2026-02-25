@@ -10,7 +10,7 @@ async function main() {
     console.log("Loading config...");
     const { data: configRows } = await supabase.from('app_settings').select('*').eq('key', 'hotmart_config').single();
     const config = configRows?.value;
-    const hotmart = new HotmartClient(config);
+    const hotmart = HotmartClient.getInstance();
 
     // Let's test the Plans API for the MENTE MAESTRA subscription (ID: 4174586, ucode: a1fc6557-9527-4812-bbe9-216b970bcad0)
     console.log("Testing Plans API for MENTE MAESTRA...");
