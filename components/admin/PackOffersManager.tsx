@@ -250,10 +250,10 @@ export default function PackOffersManager({ packId, packName, trigger }: PackOff
                                         </select>
                                     </div>
                                     <div className="space-y-1.5 col-span-2">
-                                        <Label>Link de Checkout (URL Directa)</Label>
+                                        <Label>Link de Checkout (Opcional - Requerido para Hotmart/Stripe)</Label>
                                         <Input
-                                            type="url"
-                                            placeholder="https://pay.hotmart.com/..."
+                                            type="text"
+                                            placeholder="https://pay.hotmart.com/... (Dejar vacío para Sequra)"
                                             value={newCheckoutUrl}
                                             onChange={(e) => setNewCheckoutUrl(e.target.value)}
                                             disabled={creatingSubmit}
