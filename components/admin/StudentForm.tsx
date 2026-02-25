@@ -86,14 +86,48 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
     };
 
     const loadCoaches = async () => {
-        const { data } = await supabase
+        const { data: coachesData } = await supabase
             .from('profiles')
             .select('id, full_name, email')
             .eq('role', 'coach')
             .eq('is_active', true)
             .order('full_name');
 
-        if (data) setCoaches(data);
+        if (!coachesData) return;
+
+        // Get all active students to count assignments
+        const { data: activeStudents } = await supabase
+            .from('students')
+            .select('assigned_coach_id')
+            .eq('status', 'active')
+            .not('assigned_coach_id', 'is', null);
+
+        // Count students per coach
+        const studentCounts = (activeStudents || []).reduce((acc: any, std: any) => {
+            if (std.assigned_coach_id) {
+                acc[std.assigned_coach_id] = (acc[std.assigned_coach_id] || 0) + 1;
+            }
+            return acc;
+        }, {});
+
+        // Map coaches with counts
+        const coachesWithCounts = (coachesData as any[]).map(coach => ({
+            ...coach,
+            active_students: studentCounts[coach.id] || 0
+        }));
+
+        setCoaches(coachesWithCounts);
+
+        // If creating a new student, auto-assign the coach with fewest active students
+        if (!student && coachesWithCounts.length > 0) {
+            setAssignedCoachId((currentAssigned) => {
+                if (!currentAssigned) {
+                    const sortedCoaches = [...coachesWithCounts].sort((a, b) => a.active_students - b.active_students);
+                    return sortedCoaches[0].id;
+                }
+                return currentAssigned;
+            });
+        }
     };
 
     const loadClosers = async () => {
@@ -299,7 +333,7 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                             <option value="">Sin coach asignado</option>
                             {coaches.map(coach => (
                                 <option key={coach.id} value={coach.id}>
-                                    {coach.full_name} ({coach.email})
+                                    {coach.full_name} ({coach.email}) - {coach.active_students ?? 0} alumnos activos
                                 </option>
                             ))}
                         </select>

@@ -42,6 +42,7 @@ interface Profile {
     full_name: string;
     email: string;
     role: string;
+    active_students?: number;
 }
 
 export default function UnifiedLinkGenerator() {
@@ -132,9 +133,12 @@ export default function UnifiedLinkGenerator() {
         if (selectedStudent && selectedStudent !== prevSelectedStudentRef.current) {
             const student = students.find(s => s.id === selectedStudent);
             if (student) {
-                // Autocompletar coach si está asignado
+                // Autocompletar coach si está asignado, de lo contrario buscar el más libre
                 if (student.assigned_coach_id) {
                     setAssignedCoach(student.assigned_coach_id);
+                } else if (coaches.length > 0) {
+                    const sortedCoaches = [...coaches].sort((a, b) => (a.active_students || 0) - (b.active_students || 0));
+                    setAssignedCoach(sortedCoaches[0].id);
                 } else {
                     setAssignedCoach('');
                 }
@@ -153,7 +157,7 @@ export default function UnifiedLinkGenerator() {
             setSelectedCloser('');
             prevSelectedStudentRef.current = '';
         }
-    }, [selectedStudent, students]);
+    }, [selectedStudent, students, coaches]);
 
     // Added: Load coaches when component mounts or as needed
     const loadCoaches = async () => {
@@ -163,7 +167,31 @@ export default function UnifiedLinkGenerator() {
             .eq('role', 'coach')
             .eq('is_active', true)
             .order('full_name');
-        if (coachesData) setCoaches(coachesData);
+
+        if (!coachesData) return;
+
+        // Get all active students to count assignments
+        const { data: activeStudents } = await supabase
+            .from('students')
+            .select('assigned_coach_id')
+            .eq('status', 'active')
+            .not('assigned_coach_id', 'is', null);
+
+        // Count students per coach
+        const studentCounts = (activeStudents || []).reduce((acc: any, std: any) => {
+            if (std.assigned_coach_id) {
+                acc[std.assigned_coach_id] = (acc[std.assigned_coach_id] || 0) + 1;
+            }
+            return acc;
+        }, {});
+
+        // Map coaches with counts
+        const coachesWithCounts = (coachesData as any[]).map(coach => ({
+            ...coach,
+            active_students: studentCounts[coach.id] || 0
+        }));
+
+        setCoaches(coachesWithCounts);
     };
 
     useEffect(() => {
@@ -478,7 +506,7 @@ export default function UnifiedLinkGenerator() {
                         <option value="">Seleccionar coach...</option>
                         {coaches.map(coach => (
                             <option key={coach.id} value={coach.id}>
-                                {coach.full_name} ({coach.email})
+                                {coach.full_name} ({coach.email}) - {coach.active_students ?? 0} alumnos activos
                             </option>
                         ))}
                     </select>
