@@ -200,7 +200,11 @@ export async function processHotmartSync() {
         });
 
         const items = response?.items || response?.data || [];
-        const standardizedProducts: StandardizedProduct[] = items.map((prod: any) => ({
+
+        // Filter ONLY active products so paused/drafts are properly pruned later
+        const activeItems = items.filter((prod: any) => prod.status === 'ACTIVE');
+
+        const standardizedProducts: StandardizedProduct[] = activeItems.map((prod: any) => ({
             external_id: String(prod.id),
             name: prod.name || `Hotmart Product ${prod.id}`,
             description: prod.description || '',
