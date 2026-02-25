@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Package, Search, Edit2, Trash2, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
 import PackForm from '@/components/admin/PackForm';
+import PackOffersManager from '@/components/admin/PackOffersManager';
 import { toast } from 'sonner';
 
 interface Pack {
@@ -326,6 +327,10 @@ export default function AdminPacksPage() {
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex items-center justify-end gap-1">
+                                                        <PackOffersManager
+                                                            packId={pack.id}
+                                                            packName={pack.name}
+                                                        />
                                                         <PackForm
                                                             pack={pack}
                                                             onSuccess={loadPacks}

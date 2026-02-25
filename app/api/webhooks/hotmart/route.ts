@@ -81,7 +81,7 @@ async function handlePurchaseComplete(data: any) {
     // 1. Get payment_link with all related data
     const { data: link, error: linkError } = await supabase
         .from('payment_links')
-        .select('*, pack:packs(*)')
+        .select('*, pack:packs(*), offer:pack_offers(*)')
         .eq('id', linkId)
         .single();
 
@@ -93,10 +93,12 @@ async function handlePurchaseComplete(data: any) {
     // Retrieve data from the link record, not from Hotmart payload
     const studentId = link.student_id;
     const packId = link.pack_id;
+    const offerId = link.pack_offer_id;
+
     // Metadata in link contains agent IDs
     const { coach_id, closer_id, setter_id } = link.metadata || {};
 
-    const packPrice = link.pack.price || totalAmount;
+    const packPrice = link.offer?.price || link.pack?.price || totalAmount;
 
     // 2. Create sale
     const { data: sale, error: saleError } = await supabase
@@ -116,7 +118,8 @@ async function handlePurchaseComplete(data: any) {
                 coach_id: coach_id,
                 closer_id: closer_id,
                 setter_id: setter_id,
-                link_id: linkId // Keep track of origin link
+                link_id: linkId, // Keep track of origin link
+                pack_offer_id: offerId
             },
         })
         .select()

@@ -41,7 +41,7 @@ async function main() {
     try {
         // 1. Obtener todos los productos de Hotmart
         console.log('📦 Fetching products from Hotmart...');
-        const productsResponse = await hotmart.request<any>('product/rest/v1/products?max_results=50');
+        const productsResponse = await hotmart.request<any>('https://developers.hotmart.com/products/api/v1/products?max_results=50');
         const products: HotmartProduct[] = productsResponse.items || [];
 
         console.log(`✅ Found ${products.length} products on Hotmart.`);
@@ -50,10 +50,11 @@ async function main() {
             console.log(`\n---------------------------------`);
             console.log(`Processing Product: ${product.name} (${product.id})`);
 
-            if (product.status !== 'ACTIVE') {
-                console.log(`Skipping inactive product (Status: ${product.status})`);
-                continue;
-            }
+            // TEMPORARY: Allow all statuses for testing
+            // if (product.status !== 'ACTIVE') {
+            //     console.log(`Skipping inactive product (Status: ${product.status})`);
+            //     continue;
+            // }
 
             // 2. Upsert Pack
             const { data: pack, error: packError } = await supabase
@@ -104,8 +105,8 @@ async function main() {
             // 3. Obtener Offers para el producto
             console.log(`🔍 Fetching offers for product ${product.id} (ucode: ${product.ucode})...`);
             try {
-                // Testing the standard developer endpoint
-                const offersResponse = await hotmart.request<any>(`product/rest/v1/Offers?ucode=${product.ucode}`);
+                // Use absolute modern API for Offers
+                const offersResponse = await hotmart.request<any>(`https://developers.hotmart.com/products/api/v1/products/${product.ucode}/offers?max_results=50`);
                 const offers: HotmartOffer[] = offersResponse.items || [];
 
                 console.log(`✅ Found ${offers.length} offers for this product.`);

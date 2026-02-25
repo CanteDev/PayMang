@@ -97,9 +97,13 @@ export class HotmartClient {
         // Use the API_URL from config or fallback
         const baseUrl = config.API_URL || config.api_url || 'https://sandbox.hotmart.com/payments/api/v1';
 
-        // ensure endpoint starts with /
-        const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-        const url = `${baseUrl}${formattedEndpoint}`;
+        // Check if endpoint is already an absolute URL
+        let url = endpoint;
+        if (!endpoint.startsWith('http')) {
+            // ensure endpoint starts with /
+            const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+            url = `${baseUrl}${formattedEndpoint}`;
+        }
 
         const headers = {
             'Content-Type': 'application/json',
