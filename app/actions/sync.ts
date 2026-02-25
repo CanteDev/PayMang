@@ -113,42 +113,45 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
     }
 
     // --- PURGE MISSING OFFERS ---
-    // Find all active offers for this gateway
-    const { data: allGatewayOffers } = await (supabase
-        .from('pack_offers') as any)
-        .select('id, external_id, pack_id')
-        .eq('gateway', gateway)
-        .eq('is_active', true);
-
+    // NO PURGAMOS HOTMART porque la API de Hotmart solo devuelve IDs de Producto Padre,
+    // y estaríamos desactivando todas las Ofertas específicas importadas manualmente o por CSV.
     let deactivatedCount = 0;
 
-    if (allGatewayOffers) {
-        for (const offer of allGatewayOffers) {
-            // If the DB offer is active, but its external_id wasn't in the list downloaded today...
-            if (offer.external_id && !processedIds.has(offer.external_id)) {
-                // Deactivate it
-                const { error: deactivateError } = await (supabase
-                    .from('pack_offers') as any)
-                    .update({ is_active: false })
-                    .eq('id', offer.id);
+    if (gateway !== 'hotmart') {
+        const { data: allGatewayOffers } = await (supabase
+            .from('pack_offers') as any)
+            .select('id, external_id, pack_id')
+            .eq('gateway', gateway)
+            .eq('is_active', true);
 
-                if (!deactivateError) {
-                    deactivatedCount++;
+        if (allGatewayOffers) {
+            for (const offer of allGatewayOffers) {
+                // If the DB offer is active, but its external_id wasn't in the list downloaded today...
+                if (offer.external_id && !processedIds.has(offer.external_id)) {
+                    // Deactivate it
+                    const { error: deactivateError } = await (supabase
+                        .from('pack_offers') as any)
+                        .update({ is_active: false })
+                        .eq('id', offer.id);
 
-                    // Check if parent Pack has ANY active offers left across ALL gateways
-                    if (offer.pack_id) {
-                        const { count, error: countError } = await (supabase
-                            .from('pack_offers') as any)
-                            .select('id', { count: 'exact', head: true })
-                            .eq('pack_id', offer.pack_id)
-                            .eq('is_active', true);
+                    if (!deactivateError) {
+                        deactivatedCount++;
 
-                        if (!countError && count === 0) {
-                            // No active offers left anywhere, deactivate the parent Pack
-                            await (supabase
-                                .from('packs') as any)
-                                .update({ is_active: false })
-                                .eq('id', offer.pack_id);
+                        // Check if parent Pack has ANY active offers left across ALL gateways
+                        if (offer.pack_id) {
+                            const { count, error: countError } = await (supabase
+                                .from('pack_offers') as any)
+                                .select('id', { count: 'exact', head: true })
+                                .eq('pack_id', offer.pack_id)
+                                .eq('is_active', true);
+
+                            if (!countError && count === 0) {
+                                // No active offers left anywhere, deactivate the parent Pack
+                                await (supabase
+                                    .from('packs') as any)
+                                    .update({ is_active: false })
+                                    .eq('id', offer.pack_id);
+                            }
                         }
                     }
                 }

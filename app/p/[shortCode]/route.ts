@@ -108,8 +108,9 @@ import { getGatewayConfig } from '@/lib/settings-helper';
 
 async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any, origin: string): Promise<string | null> {
     const config = await getGatewayConfig('stripe');
+    const secretKey = config.secret_key || config.SECRET_KEY;
 
-    if (!config.secret_key) {
+    if (!secretKey) {
         console.error('Stripe not configured');
         return null; // Return null to trigger error page
     }
@@ -125,7 +126,7 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
         return url.toString();
     }
 
-    const stripe = new Stripe(config.secret_key, {
+    const stripe = new Stripe(secretKey, {
         apiVersion: '2026-01-28.clover', // Keep consistent
     });
 
