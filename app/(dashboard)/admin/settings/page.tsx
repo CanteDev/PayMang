@@ -1,6 +1,7 @@
 import { fetchSettings } from '@/app/actions/settings';
 import SettingsForm from '@/components/admin/SettingsForm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Suspense } from 'react';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,9 @@ export default async function SettingsPage() {
                 </p>
             </div>
 
-            <SettingsForm settings={settings || []} />
+            <Suspense fallback={<div className="text-sm text-gray-500">Cargando configuración...</div>}>
+                <SettingsForm settings={settings || []} />
+            </Suspense>
         </div>
     );
 }

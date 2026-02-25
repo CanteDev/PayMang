@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Package, Search, Edit2, Trash2, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
+import { Package, Search, Edit2, Trash2, ExternalLink, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import PackForm from '@/components/admin/PackForm';
 import PackOffersManager from '@/components/admin/PackOffersManager';
 import { toast } from 'sonner';
@@ -35,6 +36,7 @@ export default function AdminPacksPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const router = useRouter();
 
     const supabase = createClient();
 
@@ -240,7 +242,13 @@ export default function AdminPacksPage() {
                             <Package className="w-5 h-5" />
                             <span>Listado de Packs</span>
                         </CardTitle>
-                        <PackForm onSuccess={loadPacks} />
+                        <Button
+                            onClick={() => router.push('/admin/settings?tab=payment')}
+                            className="bg-blue-600 hover:bg-blue-700 font-medium"
+                        >
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Sincronizar Productos
+                        </Button>
                     </div>
                 </CardHeader>
                 <CardContent>

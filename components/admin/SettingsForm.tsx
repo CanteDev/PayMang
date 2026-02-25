@@ -10,6 +10,7 @@ import { processStripeSync, processHotmartSync } from '@/app/actions/sync';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 
 interface SettingsFormProps {
     settings: any[];
@@ -19,7 +20,11 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
     const [localSettings, setLocalSettings] = useState<any[]>(settings);
     const [loading, setLoading] = useState<string | null>(null);
     const [syncLoading, setSyncLoading] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState('business');
+
+    const searchParams = useSearchParams();
+    const tabParam = searchParams.get('tab');
+    const [activeTab, setActiveTab] = useState(tabParam || 'business');
+
     const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
 
     const togglePassword = (fieldId: string) => {
