@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { updateSetting } from '@/app/actions/settings';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { Eye, EyeOff } from 'lucide-react';
 
 interface SettingsFormProps {
     settings: any[];
@@ -242,7 +243,7 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                             onClick={() => togglePassword('stripe_pk')}
                                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                         >
-                                            {showPasswords['stripe_pk'] ? '👁️' : '👁️‍🗨️'}
+                                            {showPasswords['stripe_pk'] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                         </button>
                                     </div>
                                 </div>
@@ -261,7 +262,7 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                             onClick={() => togglePassword('stripe_sk')}
                                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                         >
-                                            {showPasswords['stripe_sk'] ? '👁️' : '👁️‍🗨️'}
+                                            {showPasswords['stripe_sk'] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                         </button>
                                     </div>
                                 </div>
@@ -280,7 +281,7 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                             onClick={() => togglePassword('stripe_wh')}
                                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                         >
-                                            {showPasswords['stripe_wh'] ? '👁️' : '👁️‍🗨️'}
+                                            {showPasswords['stripe_wh'] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                         </button>
                                     </div>
                                 </div>
@@ -315,7 +316,7 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                             onClick={() => togglePassword('hotmart_cid')}
                                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                         >
-                                            {showPasswords['hotmart_cid'] ? '👁️' : '👁️‍🗨️'}
+                                            {showPasswords['hotmart_cid'] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                         </button>
                                     </div>
                                 </div>
@@ -333,7 +334,7 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                             onClick={() => togglePassword('hotmart_sec')}
                                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                         >
-                                            {showPasswords['hotmart_sec'] ? '👁️' : '👁️‍🗨️'}
+                                            {showPasswords['hotmart_sec'] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                         </button>
                                     </div>
                                 </div>
@@ -351,7 +352,7 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                             onClick={() => togglePassword('hotmart_auth')}
                                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                         >
-                                            {showPasswords['hotmart_auth'] ? '👁️' : '👁️‍🗨️'}
+                                            {showPasswords['hotmart_auth'] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                         </button>
                                     </div>
                                 </div>
@@ -369,7 +370,7 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                             onClick={() => togglePassword('hotmart_wh')}
                                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                         >
-                                            {showPasswords['hotmart_wh'] ? '👁️' : '👁️‍🗨️'}
+                                            {showPasswords['hotmart_wh'] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                         </button>
                                     </div>
                                 </div>
@@ -411,7 +412,7 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                             onClick={() => togglePassword('sequra_api')}
                                             className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                         >
-                                            {showPasswords['sequra_api'] ? '👁️' : '👁️‍🗨️'}
+                                            {showPasswords['sequra_api'] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                         </button>
                                     </div>
                                 </div>
