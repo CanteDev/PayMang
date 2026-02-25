@@ -134,8 +134,14 @@ export default function AdminStudentsPage() {
             ?.filter(p => p.status === 'paid')
             .reduce((sum, p) => sum + p.amount, 0) || 0;
 
-        const paid = Number(paidRaw.toFixed(2));
+        let paid = Number(paidRaw.toFixed(2));
         const total = Number(totalAgreed.toFixed(2));
+
+        // Auto-correct 1-5 cent divisional variances (e.g. 2500 / 3 = 833.33 * 3 = 2499.99)
+        if (total > 0 && Math.abs(total - paid) <= 0.05) {
+            paid = total;
+        }
+
         const percentage = Math.min(100, Math.round((paid / total) * 100));
         return { paid, total, percentage };
     };
