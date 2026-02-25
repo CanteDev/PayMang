@@ -130,12 +130,14 @@ export default function AdminStudentsPage() {
         const totalAgreed = student.agreed_price || 0;
         if (totalAgreed === 0) return { paid: 0, total: 0, percentage: 0 };
 
-        const paid = student.payments
+        const paidRaw = student.payments
             ?.filter(p => p.status === 'paid')
             .reduce((sum, p) => sum + p.amount, 0) || 0;
 
-        const percentage = Math.min(100, Math.round((paid / totalAgreed) * 100));
-        return { paid, total: totalAgreed, percentage };
+        const paid = Number(paidRaw.toFixed(2));
+        const total = Number(totalAgreed.toFixed(2));
+        const percentage = Math.min(100, Math.round((paid / total) * 100));
+        return { paid, total, percentage };
     };
 
     const getStatusBadge = (status: string) => {
