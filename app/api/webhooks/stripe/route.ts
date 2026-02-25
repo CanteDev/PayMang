@@ -59,6 +59,10 @@ export async function POST(request: NextRequest) {
                 await handleCheckoutCompleted(event.data.object);
                 break;
 
+            case 'invoice.paid':
+                await handleInvoicePaid(event.data.object);
+                break;
+
             case 'charge.refunded':
                 await handleChargeRefunded(event.data.object);
                 break;
@@ -129,7 +133,8 @@ async function handleCheckoutCompleted(session: any) {
                 customer: session.customer,
                 coach_id, // Persist metadata in sale 
                 closer_id,
-                setter_id
+                setter_id,
+                stripe_subscription_id: session.subscription // Clave para cuotas recurrentes
             },
         })
         .select()
@@ -153,9 +158,81 @@ async function handleCheckoutCompleted(session: any) {
         coachId: coach_id,
         closerId: closer_id,
         setterId: setter_id,
+        milestoneNumber: 1
     });
 
-    console.log(`✅ Venta ${sale.id} procesada y comisiones creadas`);
+    console.log(`✅ Venta ${sale.id} procesada y comisiones (Milestone 1) creadas`);
+}
+
+/**
+ * Manejar pagos recurrentes de suscripciones (Pago Inteligente)
+ */
+async function handleInvoicePaid(invoice: any) {
+    const supabase = getSupabaseAdmin();
+
+    // Solo nos interesan los cobros recurrentes de suscripciones (la 1ra cuota ya entra por checkout.session.completed)
+    if (invoice.billing_reason !== 'subscription_cycle') {
+        console.log(`Ignorando invoice ${invoice.id} porque reason es ${invoice.billing_reason}`);
+        return;
+    }
+
+    const subscriptionId = invoice.subscription;
+    const amountPaidInCents = invoice.amount_paid;
+
+    if (!subscriptionId || amountPaidInCents === 0) {
+        return;
+    }
+
+    const amountPaid = amountPaidInCents / 100; // Stripe viene en céntimos
+
+    // 1. Buscar la Venta original guiándonos por el stripe_subscription_id
+    const { data: originalSale, error: searchError } = await supabase
+        .from('sales')
+        .select('*')
+        .eq('gateway', 'stripe')
+        .filter('metadata->>stripe_subscription_id', 'eq', subscriptionId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single();
+
+    if (searchError || !originalSale) {
+        console.error('No se encontró la Venta original para la suscripción recurrente Stripe:', subscriptionId);
+        return;
+    }
+
+    // 2. Averiguar por qué cuota (milestone) vamos analizando las comisiones previas
+    const { data: prevCommissions, error: commError } = await supabase
+        .from('commissions')
+        .select('milestone')
+        .eq('sale_id', originalSale.id)
+        .order('milestone', { ascending: false })
+        .limit(1);
+
+    const nextMilestone = (prevCommissions && prevCommissions.length > 0)
+        ? (prevCommissions[0].milestone + 1)
+        : 2;
+
+    // 3. Sumar al amount_collected original
+    const newCollected = Number(originalSale.amount_collected || 0) + amountPaid;
+    await supabase
+        .from('sales')
+        .update({
+            amount_collected: newCollected,
+            updated_at: new Date().toISOString()
+        } as any)
+        .eq('id', originalSale.id);
+
+    // 4. Crear comisiones para esta nueva cuota
+    await createCommissions({
+        saleId: originalSale.id,
+        totalAmount: amountPaid, // Solo sobre la parte pagada HOY
+        coachId: originalSale.metadata?.coach_id,
+        closerId: originalSale.metadata?.closer_id,
+        setterId: originalSale.metadata?.setter_id,
+        milestoneNumber: nextMilestone
+    });
+
+    console.log(`✅ Stripe Recurrent Invoice procesada: Añadido importe a la Venta ${originalSale.id}, creadas comisiones Milestone ${nextMilestone}`);
 }
 
 /**
@@ -202,12 +279,14 @@ async function createCommissions({
     coachId,
     closerId,
     setterId,
+    milestoneNumber = 1
 }: {
     saleId: string;
     totalAmount: number;
-    coachId: string;
-    closerId: string;
+    coachId?: string;
+    closerId?: string;
     setterId?: string;
+    milestoneNumber?: number;
 }) {
     const supabase = getSupabaseAdmin();
     const commissions: any[] = [];
@@ -220,7 +299,7 @@ async function createCommissions({
             role_at_sale: 'coach',
             amount: calculateCommission(totalAmount, 'coach'),
             status: 'pending',
-            milestone: 1, // pago único
+            milestone: milestoneNumber,
         });
     }
 
@@ -232,7 +311,7 @@ async function createCommissions({
             role_at_sale: 'closer',
             amount: calculateCommission(totalAmount, 'closer'),
             status: 'pending',
-            milestone: 1,
+            milestone: milestoneNumber,
         });
     }
 
@@ -244,7 +323,7 @@ async function createCommissions({
             role_at_sale: 'setter',
             amount: calculateCommission(totalAmount, 'setter'),
             status: 'pending',
-            milestone: 1,
+            milestone: milestoneNumber,
         });
     }
 
@@ -258,5 +337,5 @@ async function createCommissions({
         throw error;
     }
 
-    console.log(`✅ ${commissions.length} comisiones creadas para venta ${saleId}`);
+    console.log(`✅ ${commissions.length} comisiones (milestone ${milestoneNumber}) creadas para venta ${saleId}`);
 }
