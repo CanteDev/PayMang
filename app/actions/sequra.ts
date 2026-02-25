@@ -23,17 +23,17 @@ export async function initiateSequraPayment(linkId: string) {
         .single();
 
     if (linkError || !link) {
-        throw new Error('Link no válido o expirado');
+        return { success: false, error: 'Link no válido o expirado' };
     }
 
     const paymentLink = link as PaymentLinkWithRelations;
 
     if (paymentLink.status === 'paid' || paymentLink.status === 'deleted') {
-        throw new Error('Link expirado o ya pagado');
+        return { success: false, error: 'Link expirado o ya pagado' };
     }
 
     if (!paymentLink.student || !paymentLink.pack) {
-        throw new Error('Datos del link incompletos');
+        return { success: false, error: 'Datos del link incompletos' };
     }
 
     // 2. Determine price and name (Use Offer if selected, else fallback to Pack)
@@ -65,7 +65,7 @@ export async function initiateSequraPayment(linkId: string) {
 
     if (saleError || !sale) {
         console.error('Error creating sale:', saleError);
-        throw new Error('Error al iniciar el proceso de venta');
+        return { success: false, error: 'Error al iniciar el proceso de venta' };
     }
 
     // Cast sale to expected type or any
@@ -170,7 +170,7 @@ export async function initiateSequraPayment(linkId: string) {
             console.error('Sequra response unknown:', response);
             // Use our dummy if simulated? No, we need real ref.
             // Assume response IS the Location string for now if I fix client.
-            throw new Error('No se pudo obtener la referencia de pedido de Sequra');
+            return { success: false, error: 'No se pudo obtener la referencia de pedido de Sequra' };
         }
 
         // Update Sale with real ID
@@ -194,6 +194,6 @@ export async function initiateSequraPayment(linkId: string) {
     } catch (apiError: any) {
         console.error('Sequra API Error:', apiError);
         // Mark sale as failed? or just leave pending.
-        throw new Error(`Error comunicando con Sequra: ${apiError.message}`);
+        return { success: false, error: `Error comunicando con Sequra: ${apiError.message}` };
     }
 }

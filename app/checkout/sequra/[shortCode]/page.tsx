@@ -23,11 +23,11 @@ export default function SequraCheckoutPage() {
         const startCheckout = async () => {
             try {
                 const result = await initiateSequraPayment(shortCode);
-                setFormHtml(result.form);
-
-                // Execute Sequra Scripts if present in HTML
-                // React dangerouslySetInnerHTML doesn't execute scripts.
-                // We need to manually inject them.
+                if (result.success === false) {
+                    setError(result.error || 'Error desconocido de SeQura');
+                } else {
+                    setFormHtml(result.form);
+                }
             } catch (err: any) {
                 console.error('Checkout error:', err);
                 setError(err.message || 'Error iniciando el pago con Sequra');
