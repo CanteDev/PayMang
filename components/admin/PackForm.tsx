@@ -107,11 +107,9 @@ export default function PackForm({ pack, trigger, onSuccess }: PackFormProps) {
             setLoading(false);
             return;
         }
-        if (!hotmartLink && !stripeLink && !sequraLink) {
-            setError('Debes configurar al menos un link de pago (Hotmart, Stripe o SeQura)');
-            setLoading(false);
-            return;
-        }
+        // Validación antigua eliminada: Ya no exigimos que haya al menos un link aquí,
+        // porque ahora los links y pasarelas se añaden estricamente desde "Gestión de Ofertas"
+
 
         const gateway_ids: Record<string, string> = {};
         if (hotmartLink.trim()) gateway_ids.hotmart_link = hotmartLink.trim();
@@ -248,106 +246,7 @@ export default function PackForm({ pack, trigger, onSuccess }: PackFormProps) {
                         </div>
                     </div>
 
-                    {/* Payment Links */}
-                    <div className="space-y-4 pt-1 border-t">
-                        <div>
-                            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mt-4">
-                                Links de Pago
-                            </h3>
-                            <p className="text-xs text-gray-500 mt-1">
-                                Al menos un link es obligatorio. La pasarela estará disponible si su link está configurado.
-                            </p>
-                        </div>
-
-                        <div className="space-y-3">
-                            {/* Hotmart */}
-                            <div className="space-y-1.5">
-                                <Label htmlFor="hotmart-link" className="flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
-                                    Link Hotmart
-                                </Label>
-                                <div className="relative">
-                                    <Input
-                                        id="hotmart-link"
-                                        type="url"
-                                        value={hotmartLink}
-                                        onChange={(e) => setHotmartLink(e.target.value)}
-                                        disabled={loading}
-                                        placeholder="https://pay.hotmart.com/..."
-                                        className="pr-10"
-                                    />
-                                    {hotmartLink && (
-                                        <a
-                                            href={hotmartLink}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                        >
-                                            <ExternalLink className="w-4 h-4" />
-                                        </a>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Stripe */}
-                            <div className="space-y-1.5">
-                                <Label htmlFor="stripe-link" className="flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full bg-violet-500 inline-block" />
-                                    Link Stripe
-                                </Label>
-                                <div className="relative">
-                                    <Input
-                                        id="stripe-link"
-                                        type="url"
-                                        value={stripeLink}
-                                        onChange={(e) => setStripeLink(e.target.value)}
-                                        disabled={loading}
-                                        placeholder="https://buy.stripe.com/..."
-                                        className="pr-10"
-                                    />
-                                    {stripeLink && (
-                                        <a
-                                            href={stripeLink}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                        >
-                                            <ExternalLink className="w-4 h-4" />
-                                        </a>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* SeQura */}
-                            <div className="space-y-1.5">
-                                <Label htmlFor="sequra-link" className="flex items-center gap-1.5">
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
-                                    Link SeQura
-                                </Label>
-                                <div className="relative">
-                                    <Input
-                                        id="sequra-link"
-                                        type="url"
-                                        value={sequraLink}
-                                        onChange={(e) => setSequraLink(e.target.value)}
-                                        disabled={loading}
-                                        placeholder="https://..."
-                                        className="pr-10"
-                                    />
-                                    {sequraLink && (
-                                        <a
-                                            href={sequraLink}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                                        >
-                                            <ExternalLink className="w-4 h-4" />
-                                        </a>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    {/* Payment Links (Removed - Now handled by PackOffersManager) */}
 
                     {/* Commission Percentages */}
                     <div className="space-y-4 pt-1 border-t">
