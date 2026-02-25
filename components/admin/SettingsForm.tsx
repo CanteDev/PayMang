@@ -6,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { updateSetting } from '@/app/actions/settings';
+import { processStripeSync, processHotmartSync } from '@/app/actions/sync';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, RefreshCw } from 'lucide-react';
 
 interface SettingsFormProps {
     settings: any[];
@@ -17,6 +18,7 @@ interface SettingsFormProps {
 export default function SettingsForm({ settings }: SettingsFormProps) {
     const [localSettings, setLocalSettings] = useState<any[]>(settings);
     const [loading, setLoading] = useState<string | null>(null);
+    const [syncLoading, setSyncLoading] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState('business');
     const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
 
@@ -55,6 +57,30 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
             toast.error('Error al guardar la configuración');
         } finally {
             setLoading(null);
+        }
+    };
+
+    const handleSync = async (gateway: 'stripe' | 'hotmart') => {
+        setSyncLoading(gateway);
+        toast.info(`Iniciando sincronización de ${gateway}...`);
+        try {
+            let res;
+            if (gateway === 'stripe') {
+                res = await processStripeSync();
+            } else if (gateway === 'hotmart') {
+                res = await processHotmartSync();
+            }
+            if (res && res.success) {
+                toast.success(<div className="flex flex-col gap-1">
+                    <span>Sincronización completada</span>
+                    <span className="text-xs opacity-90">{res.newCount} añadidos, {res.updatedCount} actualizados, {res.deactivatedCount} desactivados.</span>
+                </div>);
+            }
+        } catch (error: any) {
+            console.error(error);
+            toast.error(`Error sincronizando ${gateway}: ${error.message}`);
+        } finally {
+            setSyncLoading(null);
         }
     };
 
@@ -291,12 +317,22 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                         </button>
                                     </div>
                                 </div>
-                                <Button
-                                    onClick={() => handleSave('stripe_config')}
-                                    disabled={loading === 'stripe_config'}
-                                >
-                                    {loading === 'stripe_config' ? 'Guardando...' : 'Guardar Stripe'}
-                                </Button>
+                                <div className="flex gap-3 pt-2">
+                                    <Button
+                                        onClick={() => handleSave('stripe_config')}
+                                        disabled={loading === 'stripe_config'}
+                                    >
+                                        {loading === 'stripe_config' ? 'Guardando...' : 'Guardar Stripe'}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => handleSync('stripe')}
+                                        disabled={syncLoading === 'stripe'}
+                                    >
+                                        <RefreshCw className={cn("mr-2 h-4 w-4", syncLoading === 'stripe' && "animate-spin")} />
+                                        {syncLoading === 'stripe' ? 'Sincronizando...' : 'Sincronizar Productos'}
+                                    </Button>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -380,12 +416,22 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                         </button>
                                     </div>
                                 </div>
-                                <Button
-                                    onClick={() => handleSave('hotmart_config')}
-                                    disabled={loading === 'hotmart_config'}
-                                >
-                                    {loading === 'hotmart_config' ? 'Guardando...' : 'Guardar Hotmart'}
-                                </Button>
+                                <div className="flex gap-3 pt-2">
+                                    <Button
+                                        onClick={() => handleSave('hotmart_config')}
+                                        disabled={loading === 'hotmart_config'}
+                                    >
+                                        {loading === 'hotmart_config' ? 'Guardando...' : 'Guardar Hotmart'}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => handleSync('hotmart')}
+                                        disabled={syncLoading === 'hotmart'}
+                                    >
+                                        <RefreshCw className={cn("mr-2 h-4 w-4", syncLoading === 'hotmart' && "animate-spin")} />
+                                        {syncLoading === 'hotmart' ? 'Sincronizando...' : 'Sincronizar Productos'}
+                                    </Button>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
