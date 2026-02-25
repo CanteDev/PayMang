@@ -42,7 +42,13 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
         try {
             const setting = localSettings.find(s => s.key === key);
             const valueToSave = setting ? setting.value : {};
-            await updateSetting(key, valueToSave);
+
+            // Determinar categoría por defecto basada en la clave
+            let category = 'system';
+            if (['commission_rates', 'sequra_milestones'].includes(key)) category = 'business';
+            if (['stripe_config', 'hotmart_config', 'sequra_config'].includes(key)) category = 'payment';
+
+            await updateSetting(category, key, valueToSave);
             toast.success('Configuración guardada correctamente');
         } catch (error) {
             console.error(error);

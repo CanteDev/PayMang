@@ -23,7 +23,7 @@ export async function fetchSettings() {
     return data;
 }
 
-export async function updateSetting(key: string, value: any) {
+export async function updateSetting(category: string, key: string, value: any) {
     const supabase = await createClient();
 
     // Validate if user is admin (RLS does this, but double check usually good)
@@ -34,6 +34,7 @@ export async function updateSetting(key: string, value: any) {
     const { error } = await (supabase
         .from('app_settings') as any)
         .upsert({
+            category: category,
             key: key,
             value: value,
             updated_at: new Date().toISOString()
