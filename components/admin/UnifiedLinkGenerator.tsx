@@ -290,7 +290,10 @@ export default function UnifiedLinkGenerator() {
 
             if (insertError) throw insertError;
 
-            const link = `${CONFIG.APP.URL}/p/${shortCode}`;
+            // Use window.location.origin if available to ensure the link matches the current Domain perfectly
+            const baseUrl = typeof window !== 'undefined' ? window.location.origin : CONFIG.APP.URL;
+            const link = `${baseUrl}/p/${shortCode}`;
+
             setGeneratedLink(link);
             setGeneratedLinkId(shortCode); // Guardar el ID para simular pago
 
