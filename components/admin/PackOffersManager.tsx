@@ -161,6 +161,19 @@ export default function PackOffersManager({ packId, packName, trigger }: PackOff
         }
     };
 
+    const getBadgeClasses = (gateway: string) => {
+        switch (gateway.toLowerCase()) {
+            case 'hotmart':
+                return 'bg-orange-100 text-orange-700';
+            case 'stripe':
+                return 'bg-violet-100 text-violet-700';
+            case 'sequra':
+                return 'bg-emerald-100 text-emerald-700';
+            default:
+                return 'bg-gray-100 text-gray-800';
+        }
+    };
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -310,7 +323,7 @@ export default function PackOffersManager({ packId, packName, trigger }: PackOff
                                     {offers.map((offer) => (
                                         <TableRow key={offer.id}>
                                             <TableCell>
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize bg-gray-100 text-gray-800">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium capitalize ${getBadgeClasses(offer.gateway)}`}>
                                                     {offer.gateway}
                                                 </span>
                                             </TableCell>

@@ -145,34 +145,24 @@ export default function AdminPacksPage() {
         const hotmartOffer = activeOffers.find(o => o.gateway === 'hotmart');
         if (hotmartOffer) {
             badges.push(
-                <a
+                <span
                     key="hotmart"
-                    href={hotmartOffer.checkout_url || '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors"
-                    title={hotmartOffer.checkout_url}
-                    onClick={e => !hotmartOffer.checkout_url && e.preventDefault()}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 transition-colors"
                 >
-                    Hotmart <ExternalLink className="w-3 h-3" />
-                </a>
+                    Hotmart
+                </span>
             );
         }
 
         const stripeOffer = activeOffers.find(o => o.gateway === 'stripe');
         if (stripeOffer) {
             badges.push(
-                <a
+                <span
                     key="stripe"
-                    href={stripeOffer.checkout_url || '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors"
-                    title={stripeOffer.checkout_url}
-                    onClick={e => !stripeOffer.checkout_url && e.preventDefault()}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-700 transition-colors"
                 >
-                    Stripe <ExternalLink className="w-3 h-3" />
-                </a>
+                    Stripe
+                </span>
             );
         }
 
