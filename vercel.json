@@ -1,8 +1,20 @@
 {
-    "crons": [
-        {
-            "path": "/api/cron/sequra-settlements",
-            "schedule": "0 6 * * *"
+    "protectionBypass": {
+        "vercelProtectionBypass": {
+            "rules": [
+                {
+                    "type": "path",
+                    "value": "/p/(.*)"
+                },
+                {
+                    "type": "path",
+                    "value": "/api/webhooks/(.*)"
+                },
+                {
+                    "type": "path",
+                    "value": "/checkout/sequra/(.*)"
+                }
+            ]
         }
-    ]
+    }
 }
