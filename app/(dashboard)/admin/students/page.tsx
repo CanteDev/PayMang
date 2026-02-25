@@ -124,8 +124,21 @@ export default function AdminStudentsPage() {
             student.email?.toLowerCase().includes(searchTerm.toLowerCase())
         );
 
-        const isOverdue = student.payments?.some(p =>
-            p.status === 'pending' && new Date(p.due_date) < new Date()
+        // +1 day grace: only overdue if due_date < yesterday (start of day)
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setHours(0, 0, 0, 0);
+
+        // Get total collected via gateway sales
+        const gatewaySales = student.sales
+            ?.filter(s => s.status === 'paid')
+            .reduce((sum, s) => sum + (s.amount_collected || 0), 0) || 0;
+
+        // A student is not overdue if gateway sales already cover full price
+        const fullyPaidViaGateway = gatewaySales >= (student.agreed_price || 0);
+
+        const isOverdue = !fullyPaidViaGateway && student.payments?.some(p =>
+            p.status === 'pending' && new Date(p.due_date) < yesterday
         );
 
         if (morosoFilter && !isOverdue) return false;
@@ -325,8 +338,13 @@ export default function AdminStudentsPage() {
                                     ) : (
                                         filteredStudents.map((student) => {
                                             const progress = getPaymentProgress(student);
-                                            const isOverdue = student.payments?.some(p =>
-                                                p.status === 'pending' && new Date(p.due_date) < new Date()
+                                            const yesterday = new Date();
+                                            yesterday.setDate(yesterday.getDate() - 1);
+                                            yesterday.setHours(0, 0, 0, 0);
+                                            const gatewaySalesTotal = student.sales?.filter(s => s.status === 'paid').reduce((sum, s) => sum + (s.amount_collected || 0), 0) || 0;
+                                            const fullyPaidViaGateway = gatewaySalesTotal >= (student.agreed_price || 0);
+                                            const isOverdue = !fullyPaidViaGateway && student.payments?.some(p =>
+                                                p.status === 'pending' && new Date(p.due_date) < yesterday
                                             );
 
                                             return (
