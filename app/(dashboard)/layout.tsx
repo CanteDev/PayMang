@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import Sidebar from '@/components/dashboard/Sidebar';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { Toaster } from 'sonner';
+import { getAppConfig } from '@/lib/config/server-config';
 
 export default async function DashboardLayout({
     children,
@@ -30,9 +31,12 @@ export default async function DashboardLayout({
         redirect('/login');
     }
 
+    const companyInfo = await getAppConfig('company_info', { name: 'PayMang' });
+    const companyName = companyInfo?.name || 'PayMang';
+
     return (
         <div className="flex h-screen bg-background-main text-gray-900">
-            <Sidebar profile={profile as any} />
+            <Sidebar profile={profile as any} companyName={companyName} />
             <div className="flex-1 flex flex-col overflow-hidden">
                 <header className="h-16 border-b bg-white flex items-center justify-between px-8 shrink-0">
                     <div className="flex items-center gap-4">

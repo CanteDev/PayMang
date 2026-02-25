@@ -23,6 +23,18 @@ export async function fetchSettings() {
     return data;
 }
 
+export async function getCompanyConfig() {
+    const supabase = await createClient();
+    // This needs to be readable without auth for the login page
+    const { data } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'company_info')
+        .single();
+
+    return (data as any)?.value || { name: 'PayMang' };
+}
+
 export async function updateSetting(category: string, key: string, value: any) {
     const supabase = await createClient();
 

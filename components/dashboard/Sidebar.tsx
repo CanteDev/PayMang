@@ -21,9 +21,10 @@ import type { Profile } from '@/types/database';
 
 interface SidebarProps {
     profile: Profile;
+    companyName?: string;
 }
 
-export default function Sidebar({ profile }: SidebarProps) {
+export default function Sidebar({ profile, companyName = 'PayMang' }: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
     const handleLogout = async () => {
@@ -81,10 +82,10 @@ export default function Sidebar({ profile }: SidebarProps) {
             <div className="p-6 border-b border-gray-800">
                 <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center">
-                        <span className="text-lg font-bold">PM</span>
+                        <span className="text-lg font-bold">{companyName.substring(0, 2).toUpperCase()}</span>
                     </div>
                     <div>
-                        <h1 className="text-xl font-semibold">PayMang</h1>
+                        <h1 className="text-xl font-semibold">{companyName}</h1>
                         <p className="text-xs text-gray-400">Gestión de comisiones</p>
                     </div>
                 </div>

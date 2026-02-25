@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { getCompanyConfig } from '@/app/actions/settings';
 
 export default function LoginPage() {
     return (
@@ -21,8 +22,17 @@ function LoginForm() {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [companyName, setCompanyName] = useState('PayMang');
     const router = useRouter();
     const searchParams = useSearchParams();
+
+    useEffect(() => {
+        getCompanyConfig().then(config => {
+            if (config?.name) {
+                setCompanyName(config.name);
+            }
+        }).catch(console.error);
+    }, []);
 
     useEffect(() => {
         const errorMsg = searchParams.get('error');
@@ -106,10 +116,10 @@ function LoginForm() {
                 <CardHeader className="space-y-1 text-center pb-6">
                     <div className="mb-4">
                         <div className="w-14 h-14 bg-primary-700 rounded-xl mx-auto flex items-center justify-center shadow-sm">
-                            <span className="text-xl font-bold text-white">PM</span>
+                            <span className="text-xl font-bold text-white">{companyName.substring(0, 2).toUpperCase()}</span>
                         </div>
                     </div>
-                    <CardTitle className="text-2xl font-semibold text-gray-900">PayMang</CardTitle>
+                    <CardTitle className="text-2xl font-semibold text-gray-900">{companyName}</CardTitle>
                     <CardDescription className="text-sm text-gray-600">
                         Gestión de comisiones y ventas
                     </CardDescription>
