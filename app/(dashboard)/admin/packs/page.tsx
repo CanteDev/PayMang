@@ -21,6 +21,7 @@ interface Pack {
         stripe_link?: string;
         sequra_link?: string;
     };
+    pack_offers?: { gateway: string; is_active: boolean; checkout_url: string }[];
     commission_closer: number;
     commission_coach: number;
     commission_setter: number;
@@ -46,7 +47,7 @@ export default function AdminPacksPage() {
         try {
             const { data, error } = await supabase
                 .from('packs')
-                .select('*')
+                .select('*, pack_offers(gateway, is_active, checkout_url)')
                 .order('name');
 
             if (error) throw error;
@@ -135,50 +136,56 @@ export default function AdminPacksPage() {
         return matchesSearch && matchesStatus;
     });
 
-    const getGatewayBadges = (gateway_ids: Pack['gateway_ids']) => {
+    const getGatewayBadges = (offers: Pack['pack_offers']) => {
         const badges = [];
-        if (gateway_ids?.hotmart_link) {
+        const activeOffers = (offers || []).filter(o => o.is_active);
+
+        const hotmartOffer = activeOffers.find(o => o.gateway === 'hotmart');
+        if (hotmartOffer) {
             badges.push(
                 <a
                     key="hotmart"
-                    href={gateway_ids.hotmart_link}
+                    href={hotmartOffer.checkout_url || '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors"
-                    title={gateway_ids.hotmart_link}
+                    title={hotmartOffer.checkout_url}
+                    onClick={e => !hotmartOffer.checkout_url && e.preventDefault()}
                 >
                     Hotmart <ExternalLink className="w-3 h-3" />
                 </a>
             );
         }
-        if (gateway_ids?.stripe_link) {
+
+        const stripeOffer = activeOffers.find(o => o.gateway === 'stripe');
+        if (stripeOffer) {
             badges.push(
                 <a
                     key="stripe"
-                    href={gateway_ids.stripe_link}
+                    href={stripeOffer.checkout_url || '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-700 hover:bg-violet-200 transition-colors"
-                    title={gateway_ids.stripe_link}
+                    title={stripeOffer.checkout_url}
+                    onClick={e => !stripeOffer.checkout_url && e.preventDefault()}
                 >
                     Stripe <ExternalLink className="w-3 h-3" />
                 </a>
             );
         }
-        if (gateway_ids?.sequra_link) {
+
+        const sequraOffer = activeOffers.find(o => o.gateway === 'sequra');
+        if (sequraOffer) {
             badges.push(
-                <a
+                <span
                     key="sequra"
-                    href={gateway_ids.sequra_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors"
-                    title={gateway_ids.sequra_link}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700 transition-colors"
                 >
-                    SeQura <ExternalLink className="w-3 h-3" />
-                </a>
+                    SeQura
+                </span>
             );
         }
+
         if (badges.length === 0) {
             return (
                 <span className="text-xs text-gray-400 italic">Sin links configurados</span>
@@ -190,8 +197,9 @@ export default function AdminPacksPage() {
     const stats = {
         total: packs.length,
         active: packs.filter(p => p.is_active).length,
-        withHotmart: packs.filter(p => p.gateway_ids?.hotmart_link).length,
-        withStripe: packs.filter(p => p.gateway_ids?.stripe_link).length,
+        withHotmart: packs.filter(p => p.pack_offers?.some(o => o.gateway === 'hotmart' && o.is_active)).length,
+        withStripe: packs.filter(p => p.pack_offers?.some(o => o.gateway === 'stripe' && o.is_active)).length,
+        withSequra: packs.filter(p => p.pack_offers?.some(o => o.gateway === 'sequra' && o.is_active)).length,
     };
 
     return (
@@ -202,7 +210,7 @@ export default function AdminPacksPage() {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="bg-white rounded-xl border p-4">
                     <p className="text-xs text-gray-500 uppercase tracking-wide">Total Packs</p>
                     <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
@@ -218,6 +226,10 @@ export default function AdminPacksPage() {
                 <div className="bg-white rounded-xl border p-4">
                     <p className="text-xs text-gray-500 uppercase tracking-wide">Con Stripe</p>
                     <p className="text-2xl font-bold text-violet-600 mt-1">{stats.withStripe}</p>
+                </div>
+                <div className="bg-white rounded-xl border p-4">
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">Con SeQura</p>
+                    <p className="text-2xl font-bold text-emerald-600 mt-1">{stats.withSequra}</p>
                 </div>
             </div>
 
@@ -297,7 +309,7 @@ export default function AdminPacksPage() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex flex-wrap gap-1.5">
-                                                        {getGatewayBadges(pack.gateway_ids)}
+                                                        {getGatewayBadges(pack.pack_offers)}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
