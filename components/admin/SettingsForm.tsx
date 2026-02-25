@@ -17,6 +17,11 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
     const [localSettings, setLocalSettings] = useState<any[]>(settings);
     const [loading, setLoading] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState('business');
+    const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
+
+    const togglePassword = (fieldId: string) => {
+        setShowPasswords(prev => ({ ...prev, [fieldId]: !prev[fieldId] }));
+    };
 
     const getSetting = (key: string) => localSettings.find(s => s.key === key)?.value || {};
 
@@ -35,7 +40,8 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
         setLoading(key);
         try {
             const setting = localSettings.find(s => s.key === key);
-            await updateSetting(key, setting.value);
+            const valueToSave = setting ? setting.value : {};
+            await updateSetting(key, valueToSave);
             toast.success('Configuración guardada correctamente');
         } catch (error) {
             console.error(error);
@@ -223,30 +229,60 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                             <div className="space-y-4">
                                 <div className="space-y-2">
                                     <Label>Publishable Key</Label>
-                                    <Input
-                                        type="password"
-                                        value={stripeConfig.publishable_key || ''}
-                                        onChange={e => handleUpdate('stripe_config', { ...stripeConfig, publishable_key: e.target.value })}
-                                        placeholder="pk_test_..."
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            type={showPasswords['stripe_pk'] ? "text" : "password"}
+                                            value={stripeConfig.PUBLISHABLE_KEY || stripeConfig.publishable_key || ''}
+                                            onChange={e => handleUpdate('stripe_config', { ...stripeConfig, PUBLISHABLE_KEY: e.target.value })}
+                                            placeholder="pk_test_..."
+                                            className="pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => togglePassword('stripe_pk')}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        >
+                                            {showPasswords['stripe_pk'] ? '👁️' : '👁️‍🗨️'}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Secret Key</Label>
-                                    <Input
-                                        type="password"
-                                        value={stripeConfig.secret_key || ''}
-                                        onChange={e => handleUpdate('stripe_config', { ...stripeConfig, secret_key: e.target.value })}
-                                        placeholder="sk_test_..."
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            type={showPasswords['stripe_sk'] ? "text" : "password"}
+                                            value={stripeConfig.SECRET_KEY || stripeConfig.secret_key || ''}
+                                            onChange={e => handleUpdate('stripe_config', { ...stripeConfig, SECRET_KEY: e.target.value })}
+                                            placeholder="sk_test_..."
+                                            className="pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => togglePassword('stripe_sk')}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        >
+                                            {showPasswords['stripe_sk'] ? '👁️' : '👁️‍🗨️'}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Webhook Secret</Label>
-                                    <Input
-                                        type="password"
-                                        value={stripeConfig.webhook_secret || ''}
-                                        onChange={e => handleUpdate('stripe_config', { ...stripeConfig, webhook_secret: e.target.value })}
-                                        placeholder="whsec_..."
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            type={showPasswords['stripe_wh'] ? "text" : "password"}
+                                            value={stripeConfig.WEBHOOK_SECRET || stripeConfig.webhook_secret || ''}
+                                            onChange={e => handleUpdate('stripe_config', { ...stripeConfig, WEBHOOK_SECRET: e.target.value })}
+                                            placeholder="whsec_..."
+                                            className="pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => togglePassword('stripe_wh')}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        >
+                                            {showPasswords['stripe_wh'] ? '👁️' : '👁️‍🗨️'}
+                                        </button>
+                                    </div>
                                 </div>
                                 <Button
                                     onClick={() => handleSave('stripe_config')}
@@ -267,34 +303,75 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                             <div className="space-y-4">
                                 <div className="space-y-2">
                                     <Label>Client ID</Label>
-                                    <Input
-                                        value={hotmartConfig.client_id || ''}
-                                        onChange={e => handleUpdate('hotmart_config', { ...hotmartConfig, client_id: e.target.value })}
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            type={showPasswords['hotmart_cid'] ? "text" : "password"}
+                                            value={hotmartConfig.CLIENT_ID || hotmartConfig.client_id || ''}
+                                            onChange={e => handleUpdate('hotmart_config', { ...hotmartConfig, CLIENT_ID: e.target.value })}
+                                            className="pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => togglePassword('hotmart_cid')}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        >
+                                            {showPasswords['hotmart_cid'] ? '👁️' : '👁️‍🗨️'}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Client Secret</Label>
-                                    <Input
-                                        type="password"
-                                        value={hotmartConfig.client_secret || ''}
-                                        onChange={e => handleUpdate('hotmart_config', { ...hotmartConfig, client_secret: e.target.value })}
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            type={showPasswords['hotmart_sec'] ? "text" : "password"}
+                                            value={hotmartConfig.CLIENT_SECRET || hotmartConfig.client_secret || ''}
+                                            onChange={e => handleUpdate('hotmart_config', { ...hotmartConfig, CLIENT_SECRET: e.target.value })}
+                                            className="pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => togglePassword('hotmart_sec')}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        >
+                                            {showPasswords['hotmart_sec'] ? '👁️' : '👁️‍🗨️'}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Basic Auth Token</Label>
-                                    <Input
-                                        type="password"
-                                        value={hotmartConfig.basic_auth || ''}
-                                        onChange={e => handleUpdate('hotmart_config', { ...hotmartConfig, basic_auth: e.target.value })}
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            type={showPasswords['hotmart_auth'] ? "text" : "password"}
+                                            value={hotmartConfig.BASIC_AUTH || hotmartConfig.basic_auth || ''}
+                                            onChange={e => handleUpdate('hotmart_config', { ...hotmartConfig, BASIC_AUTH: e.target.value })}
+                                            className="pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => togglePassword('hotmart_auth')}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        >
+                                            {showPasswords['hotmart_auth'] ? '👁️' : '👁️‍🗨️'}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Webhook Secret (Hottok)</Label>
-                                    <Input
-                                        type="password"
-                                        value={hotmartConfig.webhook_secret || ''}
-                                        onChange={e => handleUpdate('hotmart_config', { ...hotmartConfig, webhook_secret: e.target.value })}
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            type={showPasswords['hotmart_wh'] ? "text" : "password"}
+                                            value={hotmartConfig.WEBHOOK_SECRET || hotmartConfig.webhook_secret || ''}
+                                            onChange={e => handleUpdate('hotmart_config', { ...hotmartConfig, WEBHOOK_SECRET: e.target.value })}
+                                            className="pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => togglePassword('hotmart_wh')}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        >
+                                            {showPasswords['hotmart_wh'] ? '👁️' : '👁️‍🗨️'}
+                                        </button>
+                                    </div>
                                 </div>
                                 <Button
                                     onClick={() => handleSave('hotmart_config')}
@@ -316,24 +393,34 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                 <div className="space-y-2">
                                     <Label>Merchant ID</Label>
                                     <Input
-                                        value={sequraConfig.merchant_id || ''}
-                                        onChange={e => handleUpdate('sequra_config', { ...sequraConfig, merchant_id: e.target.value })}
+                                        value={sequraConfig.MERCHANT_ID || sequraConfig.merchant_id || ''}
+                                        onChange={e => handleUpdate('sequra_config', { ...sequraConfig, MERCHANT_ID: e.target.value })}
                                     />
                                 </div>
                                 <div className="space-y-2">
                                     <Label>API Key / Asset Token</Label>
-                                    <Input
-                                        type="password"
-                                        value={sequraConfig.api_key || ''}
-                                        onChange={e => handleUpdate('sequra_config', { ...sequraConfig, api_key: e.target.value })}
-                                    />
+                                    <div className="relative">
+                                        <Input
+                                            type={showPasswords['sequra_api'] ? "text" : "password"}
+                                            value={sequraConfig.API_KEY || sequraConfig.api_key || ''}
+                                            onChange={e => handleUpdate('sequra_config', { ...sequraConfig, API_KEY: e.target.value })}
+                                            className="pr-10"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => togglePassword('sequra_api')}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        >
+                                            {showPasswords['sequra_api'] ? '👁️' : '👁️‍🗨️'}
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Entorno</Label>
                                     <select
                                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                        value={sequraConfig.environment || 'sandbox'}
-                                        onChange={e => handleUpdate('sequra_config', { ...sequraConfig, environment: e.target.value })}
+                                        value={sequraConfig.ENVIRONMENT || sequraConfig.environment || 'sandbox'}
+                                        onChange={e => handleUpdate('sequra_config', { ...sequraConfig, ENVIRONMENT: e.target.value })}
                                     >
                                         <option value="sandbox">Sandbox (Pruebas)</option>
                                         <option value="production">Producción</option>

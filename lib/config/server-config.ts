@@ -3,7 +3,15 @@ import { createClient } from '@/lib/supabase/client'; // Client-side or Server?
 // Let's create `lib/config/server-config.ts` for server actions.
 
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { CONFIG } from '@/config/app.config';
+
+function getSupabaseAdmin() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    if (!serviceRoleKey) throw new Error('SERVICE_ROLE_KEY missing');
+    return createAdminClient(supabaseUrl, serviceRoleKey);
+}
 
 // Simple in-memory cache for serverless instance lifetime
 // Note: In serverless (Vercel), this cache is per-lambda instance and short-lived.
@@ -19,22 +27,23 @@ export async function getAppConfig(key: string, defaultValue?: any): Promise<any
     }
 
     try {
-        const supabase = await createServerClient();
+        let supabase;
+        // Detect if we are running in a clear script context without Next.js React tree 
+        // to avoid throwing the uncatchable "cookies outside scope" error entirely.
+        const isCliScript = !process.env.NEXT_PHASE && process.env.npm_lifecycle_event !== 'dev' && process.env.NODE_ENV !== 'production';
 
-        // We need to use service role if policies block reading?
-        // But `createServerClient` uses cookies (authenticated user).
-        // If Admin is logged in, they can read. 
-        // If Public user (checkout), they CANNOT read `app_settings` (RLS).
-        // So for public-facing things (e.g. Stripe Key for checkout), we might need an Action that uses Service Role?
-        // OR we use Service Role for fetching config in `server-config.ts`.
-        // Let's assume we maintain strict security:
-        // Config used in backend flows (Cron, Webhooks, API Routes) -> Use Service Role.
-        // Config used in UI (Admin) -> Use User Role.
+        try {
+            if (isCliScript) {
+                // If we are definitely in a script, skip createServerClient and go straight to Admin
+                supabase = getSupabaseAdmin();
+            } else {
+                supabase = await createServerClient();
+            }
+        } catch (err: any) {
+            // Fallback just in case
+            supabase = getSupabaseAdmin();
+        }
 
-        // For this helper, let's try to use the auth client first. If fails (or returns null), fallback?
-        // Actually, for consistency, server-side config fetching should probably be privileged if it's for system logic.
-
-        // Let's stick to standard client for now.
         const { data, error } = await supabase
             .from('app_settings')
             .select('value')

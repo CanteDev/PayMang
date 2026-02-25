@@ -1,16 +1,17 @@
-import { CONFIG } from '@/config/app.config';
+import { getAppConfig } from './config/server-config';
 
 interface HotmartTokenResponse {
     access_token: string;
     token_type: string;
     expires_in: number;
     scope: string;
+    jti: string;
 }
 
 /**
  * Singleton class to handle Hotmart API interactions
  */
-class HotmartClient {
+export class HotmartClient {
     private static instance: HotmartClient;
     private accessToken: string | null = null;
     private tokenExpiration: number = 0;
@@ -34,14 +35,17 @@ class HotmartClient {
         }
 
         try {
+            const config = await getAppConfig('hotmart_config');
+            console.log("DB HOTMART CONFIG: ", JSON.stringify(config));
+
             // Prioritize Basic Auth if available (as provided by user)
             // Otherwise construct from Client ID + Secret
-            let authHeader = CONFIG.GATEWAYS.HOTMART.BASIC_AUTH;
+            let authHeader = config.BASIC_AUTH || config.basic_auth;
 
-            if (!authHeader && CONFIG.GATEWAYS.HOTMART.CLIENT_ID && CONFIG.GATEWAYS.HOTMART.CLIENT_SECRET) {
-                const credentials = Buffer.from(
-                    `${CONFIG.GATEWAYS.HOTMART.CLIENT_ID}:${CONFIG.GATEWAYS.HOTMART.CLIENT_SECRET}`
-                ).toString('base64');
+            if (!authHeader && (config.CLIENT_ID || config.client_id) && (config.CLIENT_SECRET || config.client_secret)) {
+                const clientId = config.CLIENT_ID || config.client_id;
+                const clientSecret = config.CLIENT_SECRET || config.client_secret;
+                const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
                 authHeader = `Basic ${credentials}`;
             }
 
@@ -49,7 +53,9 @@ class HotmartClient {
                 throw new Error('Hotmart credentials not configured (Missing Basic Auth or Client ID/Secret)');
             }
 
-            const response = await fetch(`${CONFIG.GATEWAYS.HOTMART.AUTH_URL}?grant_type=client_credentials`, {
+            const authUrl = 'https://api-sec-vlc.hotmart.com/security/oauth/token';
+
+            const response = await fetch(`${authUrl}?grant_type=client_credentials`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -80,11 +86,11 @@ class HotmartClient {
      */
     public async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
         const token = await this.getAccessToken();
+        const config = await getAppConfig('hotmart_config');
 
-        // The base API URL from env is usually developers.hotmart.com/payments/api/v1
-        // We will just use the base domain and append the endpoint, since endpoints vary their path
-        // i.e., /products/api/v1/ vs /payments/api/v1/
-        const baseUrl = 'https://developers.hotmart.com';
+        // Hotmart domains for API v1/v2
+        // Use the API_URL from config or fallback
+        const baseUrl = config.API_URL || config.api_url || 'https://sandbox.hotmart.com/payments/api/v1';
 
         // ensure endpoint starts with /
         const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
