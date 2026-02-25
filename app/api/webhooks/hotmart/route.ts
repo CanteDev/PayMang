@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
         const event = body.event;
 
         switch (event) {
-            case 'PURCHASE_COMPLETE':
+            case 'PURCHASE_APPROVED':
                 await handlePurchaseComplete(body.data);
                 break;
 

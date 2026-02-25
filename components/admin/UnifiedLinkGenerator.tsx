@@ -24,6 +24,17 @@ interface Pack {
     name: string;
     price: number;
     gateway_ids: any;
+    offers?: PackOffer[];
+}
+
+interface PackOffer {
+    id: string;
+    pack_id: string;
+    gateway: string;
+    external_id: string | null;
+    name: string;
+    price: number;
+    currency: string;
 }
 
 interface Profile {
@@ -43,6 +54,7 @@ export default function UnifiedLinkGenerator() {
     const [selectedStudent, setSelectedStudent] = useState<string>('');
     const [selectedPack, setSelectedPack] = useState<string>('');
     const [selectedGateway, setSelectedGateway] = useState<string>('');
+    const [selectedOffer, setSelectedOffer] = useState<string>('');
     const [selectedCloser, setSelectedCloser] = useState<string>('');
     const [selectedSetter, setSelectedSetter] = useState<string>('');
 
@@ -55,6 +67,7 @@ export default function UnifiedLinkGenerator() {
     const [success, setSuccess] = useState<string | null>(null);
 
     const [availableGateways, setAvailableGateways] = useState<string[]>([]);
+    const [availableOffers, setAvailableOffers] = useState<PackOffer[]>([]);
     const [assignedCoach, setAssignedCoach] = useState<string>('');
 
     const supabase = createClient();
@@ -74,13 +87,20 @@ export default function UnifiedLinkGenerator() {
                 .order('email');
             if (studentsData) setStudents(studentsData);
 
-            // Cargar packs
+            // Cargar packs y sus ofertas
             const { data: packsData } = await supabase
                 .from('packs')
-                .select('*')
+                .select('*, pack_offers(*)')
                 .eq('is_active', true)
                 .order('name');
-            if (packsData) setPacks(packsData);
+            if (packsData) {
+                // Map pack_offers to offers for easier access
+                const packsWithOffers = (packsData as any[]).map(p => ({
+                    ...p,
+                    offers: p.pack_offers?.filter((o: any) => o.is_active) || []
+                }));
+                setPacks(packsWithOffers);
+            }
 
             // Cargar closers
             const { data: closersData } = await supabase
@@ -150,22 +170,59 @@ export default function UnifiedLinkGenerator() {
         loadCoaches();
     }, []);
 
-    // Actualizar pasarelas disponibles cuando cambia el pack
+    // Actualizar pasarelas y ofertas disponibles cuando cambia el pack
     useEffect(() => {
         if (selectedPack) {
             const pack = packs.find(p => p.id === selectedPack);
-            if (pack?.gateway_ids) {
-                const gateways = [];
-                // New: direct payment links
-                if (pack.gateway_ids.stripe_link || pack.gateway_ids.stripe_prod_id || pack.gateway_ids.stripe) gateways.push('stripe');
-                if (pack.gateway_ids.hotmart_link || pack.gateway_ids.hotmart_prod_id || pack.gateway_ids.hotmart) gateways.push('hotmart');
-                if (pack.gateway_ids.sequra_link || pack.gateway_ids.sequra_merchant_id || pack.gateway_ids.sequra) gateways.push('sequra');
+            if (pack) {
+                const gateways = new Set<string>();
 
-                setAvailableGateways(gateways);
+                // Add gateways from offers, prioritize offers over gateway_ids
+                if (pack.offers && pack.offers.length > 0) {
+                    pack.offers.forEach(offer => gateways.add(offer.gateway));
+                }
+
+                // Add legacy gateway_ids if they exist
+                if (pack.gateway_ids) {
+                    if (pack.gateway_ids.stripe_link || pack.gateway_ids.stripe_prod_id || pack.gateway_ids.stripe) gateways.add('stripe');
+                    if (pack.gateway_ids.hotmart_link || pack.gateway_ids.hotmart_prod_id || pack.gateway_ids.hotmart) gateways.add('hotmart');
+                    if (pack.gateway_ids.sequra_link || pack.gateway_ids.sequra_merchant_id || pack.gateway_ids.sequra) gateways.add('sequra');
+                }
+
+                setAvailableGateways(Array.from(gateways));
                 setSelectedGateway(''); // Reset gateway selection
+                setSelectedOffer(''); // Reset offer selection
+                setAvailableOffers([]);
             }
+        } else {
+            setAvailableGateways([]);
+            setSelectedGateway('');
+            setAvailableOffers([]);
+            setSelectedOffer('');
         }
     }, [selectedPack, packs]);
+
+    // Actualizar ofertas cuando cambia la pasarela
+    useEffect(() => {
+        if (selectedPack && selectedGateway) {
+            const pack = packs.find(p => p.id === selectedPack);
+            if (pack && pack.offers) {
+                const gatewayOffers = pack.offers.filter(o => o.gateway === selectedGateway);
+                setAvailableOffers(gatewayOffers);
+
+                // Si la pasarela anterior tenía una oferta seleccionada, reset y dejar seleccionar
+                setSelectedOffer('');
+
+                // Set default to first offer if available to save clicks
+                if (gatewayOffers.length === 1) {
+                    setSelectedOffer(gatewayOffers[0].id);
+                }
+            }
+        } else {
+            setAvailableOffers([]);
+            setSelectedOffer('');
+        }
+    }, [selectedGateway, packs, selectedPack]);
 
     const handleGenerateLink = async () => {
         setError(null);
@@ -219,6 +276,7 @@ export default function UnifiedLinkGenerator() {
                     id: shortCode,
                     student_id: selectedStudent,
                     pack_id: selectedPack,
+                    pack_offer_id: selectedOffer || null,
                     gateway: selectedGateway,
                     status: 'pending',
                     created_by: user.id,
@@ -367,7 +425,7 @@ export default function UnifiedLinkGenerator() {
                         value={selectedGateway}
                         onChange={(e) => setSelectedGateway(e.target.value)}
                         className="w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
-                        disabled={loading || !selectedPack}
+                        disabled={loading || !selectedPack || availableGateways.length === 0}
                     >
                         <option value="">Seleccionar pasarela...</option>
                         {availableGateways.map(gateway => (
@@ -382,6 +440,27 @@ export default function UnifiedLinkGenerator() {
                         </p>
                     )}
                 </div>
+
+                {/* Offer */}
+                {availableOffers.length > 0 && (
+                    <div className="space-y-2">
+                        <Label htmlFor="offer">Oferta / Modalidad *</Label>
+                        <select
+                            id="offer"
+                            value={selectedOffer}
+                            onChange={(e) => setSelectedOffer(e.target.value)}
+                            className="w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
+                            disabled={loading || !selectedGateway}
+                        >
+                            <option value="">Seleccionar oferta...</option>
+                            {availableOffers.map(offer => (
+                                <option key={offer.id} value={offer.id}>
+                                    {offer.name} - {offer.price} {offer.currency}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
 
                 {/* Coach Selection */}
                 <div className="space-y-2">

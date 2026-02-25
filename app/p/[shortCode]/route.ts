@@ -34,7 +34,8 @@ export async function GET(
             .select(`
                 *,
                 student:students(*),
-                pack:packs(*)
+                pack:packs(*),
+                offer:pack_offers(*)
             `)
             .eq('id', shortCode)
             .single() as { data: PaymentLinkWithRelations | null, error: any };
@@ -64,6 +65,7 @@ export async function GET(
             link.gateway || 'stripe', // Default to Stripe
             link.student,
             link.pack,
+            link.offer,
             { link_id: link.id, coach_id: link.created_by, metadata: link.metadata }
         );
 
@@ -84,13 +86,14 @@ async function buildPaymentUrl(
     gateway: string,
     student: any,
     pack: any,
+    offer: any,
     metadata: any
 ): Promise<string | null> {
     switch (gateway) {
         case 'stripe':
-            return await buildStripeUrl(student, pack, metadata);
+            return await buildStripeUrl(student, pack, offer, metadata);
         case 'hotmart':
-            return buildHotmartUrl(student, pack, metadata);
+            return buildHotmartUrl(student, pack, offer, metadata);
         case 'sequra':
             return buildSeQuraUrl(student, pack, metadata);
         default:
@@ -100,12 +103,23 @@ async function buildPaymentUrl(
 
 import { getGatewayConfig } from '@/lib/settings-helper';
 
-async function buildStripeUrl(student: any, pack: any, metadata: any): Promise<string | null> {
+async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any): Promise<string | null> {
     const config = await getGatewayConfig('stripe');
 
     if (!config.secret_key) {
         console.error('Stripe not configured');
         return null; // Return null to trigger error page
+    }
+
+    // SI HAY OFERTA: Usamos el checkout_url directamente (si lo has importado así en Stripe, aunque típicamente en Stripe generas la session aquí)
+    // Pero asumiendo que el "checkout_url" de la oferta tiene el enlace de pago directo o queremos seguir generando la sesión dinámica:
+    // Si queremos redirigir a un payment link pre-creado de stripe en checkout_url:
+    if (offer && offer.checkout_url && offer.checkout_url.startsWith('https://')) {
+        // Option A: redirect to pre-existing Stripe Payment Link
+        const url = new URL(offer.checkout_url);
+        url.searchParams.set('client_reference_id', metadata.link_id);
+        url.searchParams.set('prefilled_email', student.email);
+        return url.toString();
     }
 
     const stripe = new Stripe(config.secret_key, {
@@ -118,12 +132,12 @@ async function buildStripeUrl(student: any, pack: any, metadata: any): Promise<s
             line_items: [
                 {
                     price_data: {
-                        currency: 'eur',
+                        currency: offer ? offer.currency : 'eur',
                         product_data: {
-                            name: pack.name,
+                            name: offer ? offer.name : pack.name,
                             description: pack.description || `Pago por ${pack.name}`,
                         },
-                        unit_amount: Math.round(pack.price * 100), // cents
+                        unit_amount: Math.round((offer ? offer.price : pack.price) * 100), // cents
                     },
                     quantity: 1,
                 },
@@ -138,7 +152,8 @@ async function buildStripeUrl(student: any, pack: any, metadata: any): Promise<s
                 pack_id: pack.id,
                 agent_id: metadata.created_by, // Assuming similar to coach_id
                 coach_id: metadata.coach_id,
-                source: 'paymang_link'
+                source: 'paymang_link',
+                offer_id: offer ? offer.id : null
             },
         });
 
@@ -149,9 +164,24 @@ async function buildStripeUrl(student: any, pack: any, metadata: any): Promise<s
     }
 }
 
-async function buildHotmartUrl(student: any, pack: any, metadata: any): Promise<string | null> {
-    // Get product code and offer ID from pack configuration
-    // Product ID should be the public code (e.g., L104393461L)
+async function buildHotmartUrl(student: any, pack: any, offer: any, metadata: any): Promise<string | null> {
+
+    // NEW LOGIC WITH OFFERS
+    if (offer && offer.checkout_url) {
+        console.log(`🔗 Usando URL de Oferta Hotmart: ${offer.name}`);
+        const url = new URL(offer.checkout_url);
+
+        // Añadir parámetros de tracking comunes
+        url.searchParams.set('email', student.email);
+        url.searchParams.set('name', student.full_name || student.email);
+        url.searchParams.set('src', metadata.link_id);
+        url.searchParams.set('sck', metadata.link_id);
+
+        console.log(`👉 URL Final Hotmart (desde Oferta): ${url.toString()}`);
+        return url.toString();
+    }
+
+    // LEGACY FALLBACK FOR PACKS WITHOUT OFFERS
     const productCode = pack.gateway_ids?.hotmart?.product_id;
     const offerCode = pack.gateway_ids?.hotmart?.offer_id;
 
@@ -160,10 +190,9 @@ async function buildHotmartUrl(student: any, pack: any, metadata: any): Promise<
         return `${CONFIG.APP.URL}/error?message=hotmart_not_configured`;
     }
 
-    // Correct URL structure discovered: https://pay.hotmart.com/{PRODUCT_CODE}?off={OFFER_CODE}
     const baseUrl = `https://pay.hotmart.com/${productCode}`;
 
-    console.log(`🔗 Generando link Hotmart para Product: ${productCode}, Offer: ${offerCode}`);
+    console.log(`🔗 Generando link Hotmart Legacy para Product: ${productCode}, Offer: ${offerCode}`);
 
     const params = new URLSearchParams({
         off: offerCode,
@@ -175,7 +204,7 @@ async function buildHotmartUrl(student: any, pack: any, metadata: any): Promise<
     });
 
     const finalUrl = `${baseUrl}?${params.toString()}`;
-    console.log(`👉 URL Final Hotmart: ${finalUrl}`);
+    console.log(`👉 URL Final Hotmart Legacy: ${finalUrl}`);
 
     return finalUrl;
 }

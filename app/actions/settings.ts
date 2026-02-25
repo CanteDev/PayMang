@@ -30,14 +30,14 @@ export async function updateSetting(key: string, value: any) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuario no autenticado');
 
-    // Update
+    // Upsert (insert or update)
     const { error } = await (supabase
         .from('app_settings') as any)
-        .update({
+        .upsert({
+            key: key,
             value: value,
             updated_at: new Date().toISOString()
-        })
-        .eq('key', key);
+        }, { onConflict: 'key' });
 
     if (error) {
         console.error(`Error updating setting ${key}:`, error);

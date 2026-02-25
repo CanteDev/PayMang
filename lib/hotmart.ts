@@ -80,7 +80,15 @@ class HotmartClient {
      */
     public async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
         const token = await this.getAccessToken();
-        const url = `${CONFIG.GATEWAYS.HOTMART.API_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+
+        // The base API URL from env is usually developers.hotmart.com/payments/api/v1
+        // We will just use the base domain and append the endpoint, since endpoints vary their path
+        // i.e., /products/api/v1/ vs /payments/api/v1/
+        const baseUrl = 'https://developers.hotmart.com';
+
+        // ensure endpoint starts with /
+        const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+        const url = `${baseUrl}${formattedEndpoint}`;
 
         const headers = {
             'Content-Type': 'application/json',
@@ -109,7 +117,13 @@ class HotmartClient {
             return {} as T;
         }
 
-        return response.json();
+        const rawText = await response.text();
+        try {
+            return JSON.parse(rawText);
+        } catch (e) {
+            console.error(`Error parsing JSON from Hotmart. Raw response: ${rawText.substring(0, 200)}...`);
+            throw new Error(`Invalid JSON response from Hotmart API: ${rawText.substring(0, 100)}`);
+        }
     }
 }
 

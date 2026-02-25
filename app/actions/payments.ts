@@ -89,51 +89,74 @@ export async function registerPayment(data: RegisterPaymentData) {
 }
 
 async function generateManualCommissions(supabase: any, studentId: string, amount: number, paymentId: string, isNew: boolean) {
-    // 1. Get student info to find agents
+    // 1. Get student info to find agents and pack
     const { data: student } = await supabase
         .from('students')
-        .select('assigned_coach_id, closer_id, setter_id')
+        .select('assigned_coach_id, closer_id, setter_id, pack_id')
         .eq('id', studentId)
         .single();
 
-    if (!student) return;
+    if (!student) {
+        console.error('[generateManualCommissions] Student not found:', studentId);
+        return;
+    }
 
     const commissions: any[] = [];
 
     // Calculate for Coach
     if (student.assigned_coach_id) {
-        commissions.push({
-            payment_id: paymentId,
-            agent_id: student.assigned_coach_id,
-            role_at_sale: 'coach',
-            amount: await calculateCommission(amount, 'coach'),
-            status: 'pending'
-        });
+        const commAmount = await calculateCommission(amount, 'coach');
+        if (commAmount > 0) {
+            commissions.push({
+                payment_id: paymentId,
+                sale_id: null,
+                agent_id: student.assigned_coach_id,
+                role_at_sale: 'coach',
+                amount: commAmount,
+                status: 'pending'
+            });
+        }
     }
 
     // Calculate for Closer
     if (student.closer_id) {
-        commissions.push({
-            payment_id: paymentId,
-            agent_id: student.closer_id,
-            role_at_sale: 'closer',
-            amount: await calculateCommission(amount, 'closer'),
-            status: 'pending'
-        });
+        const commAmount = await calculateCommission(amount, 'closer');
+        if (commAmount > 0) {
+            commissions.push({
+                payment_id: paymentId,
+                sale_id: null,
+                agent_id: student.closer_id,
+                role_at_sale: 'closer',
+                amount: commAmount,
+                status: 'pending'
+            });
+        }
     }
 
     // Calculate for Setter
     if (student.setter_id) {
-        commissions.push({
-            payment_id: paymentId,
-            agent_id: student.setter_id,
-            role_at_sale: 'setter',
-            amount: await calculateCommission(amount, 'setter'),
-            status: 'pending'
-        });
+        const commAmount = await calculateCommission(amount, 'setter');
+        if (commAmount > 0) {
+            commissions.push({
+                payment_id: paymentId,
+                sale_id: null,
+                agent_id: student.setter_id,
+                role_at_sale: 'setter',
+                amount: commAmount,
+                status: 'pending'
+            });
+        }
     }
 
     if (commissions.length > 0) {
-        await supabase.from('commissions').insert(commissions);
+        const { error } = await supabase.from('commissions').insert(commissions);
+        if (error) {
+            console.error('[generateManualCommissions] Error inserting commissions:', error.message, JSON.stringify(commissions));
+        } else {
+            console.log(`[generateManualCommissions] Created ${commissions.length} commissions for payment ${paymentId}`);
+        }
+    } else {
+        console.warn('[generateManualCommissions] No commissions generated - check agent assignments for student:', studentId);
     }
 }
+

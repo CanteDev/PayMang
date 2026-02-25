@@ -39,6 +39,21 @@ export interface Pack {
     commission_coach: number;
     commission_setter: number;
     is_active: boolean;
+    external_product_id?: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PackOffer {
+    id: string;
+    pack_id: string;
+    gateway: GatewayType;
+    external_id: string | null;
+    name: string;
+    price: number;
+    currency: string;
+    checkout_url: string;
+    is_active: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -138,6 +153,7 @@ export interface PaymentLink {
     created_by: string;
     student_id: string;
     pack_id: string;
+    pack_offer_id?: string | null;
     gateway: GatewayType;
     metadata: {
         closer_id: string;
@@ -225,6 +241,11 @@ export interface Database {
                 Insert: Omit<Notification, 'id' | 'created_at' | 'updated_at'>;
                 Update: Partial<Omit<Notification, 'id' | 'created_at' | 'updated_at'>>;
             };
+            pack_offers: {
+                Row: PackOffer;
+                Insert: Omit<PackOffer, 'id' | 'created_at' | 'updated_at'>;
+                Update: Partial<Omit<PackOffer, 'id' | 'created_at' | 'updated_at'>>;
+            };
         };
     };
 }
@@ -247,5 +268,10 @@ export interface StudentWithCoach extends Student {
 export interface PaymentLinkWithRelations extends PaymentLink {
     student?: Student;
     pack?: Pack;
+    offer?: PackOffer;
     creator?: Profile;
+}
+
+export interface PackWithOffers extends Pack {
+    offers?: PackOffer[];
 }
