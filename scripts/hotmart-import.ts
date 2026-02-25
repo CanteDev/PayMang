@@ -24,14 +24,15 @@ interface HotmartProduct {
 }
 
 interface HotmartOffer {
-    offerCode: string;
+    code: string;
     name: string;
     description?: string;
     price: {
         value: number;
-        currencyCode: string;
+        currency_code: string;
     };
-    paymentMode: string;
+    payment_mode: string;
+    is_main_offer?: boolean;
     status: string;
 }
 
@@ -114,9 +115,9 @@ async function main() {
                 for (const offer of offers) {
                     // Solo importamos ofertas en ciertos estados (por ejemplo si tienen un estado ACTIVE, aunque Hotmart a veces no lo devuelve muy explícito)
                     // The checkout URL follows a pattern using the product ucode and offer code
-                    const checkoutUrl = `https://pay.hotmart.com/${product.ucode}?checkoutMode=10&off=${offer.offerCode}`;
+                    const checkoutUrl = `https://pay.hotmart.com/${product.ucode}?checkoutMode=10&off=${offer.code}`;
 
-                    console.log(`   - Offer: ${offer.name} | Price: ${offer.price.value} ${offer.price.currencyCode}`);
+                    console.log(`   - Offer: ${offer.name} | Price: ${offer.price.value} ${offer.price.currency_code}`);
 
                     // Upsert Offer in pack_offers
                     const { data: existingOffer, error: offerFetchError } = await supabase
@@ -124,7 +125,7 @@ async function main() {
                         .select('id')
                         .eq('pack_id', packId)
                         .eq('gateway', 'hotmart')
-                        .eq('external_id', offer.offerCode)
+                        .eq('external_id', offer.code)
                         .maybeSingle();
 
                     if (offerFetchError) throw offerFetchError;
@@ -133,9 +134,9 @@ async function main() {
                         await supabase
                             .from('pack_offers')
                             .update({
-                                name: offer.name,
+                                name: offer.name || 'Hotmart Offer',
                                 price: offer.price.value,
-                                currency: offer.price.currencyCode,
+                                currency: offer.price.currency_code,
                                 checkout_url: checkoutUrl,
                                 is_active: true
                             })
@@ -146,13 +147,18 @@ async function main() {
                             .insert({
                                 pack_id: packId,
                                 gateway: 'hotmart',
-                                external_id: offer.offerCode,
-                                name: offer.name,
+                                external_id: offer.code,
+                                name: offer.name || 'Hotmart Offer',
                                 price: offer.price.value,
-                                currency: offer.price.currencyCode,
+                                currency: offer.price.currency_code,
                                 checkout_url: checkoutUrl,
                                 is_active: true
                             });
+                    }
+
+                    // If this is the main offer and the pack price is 0, update the pack price
+                    if (offer.is_main_offer) {
+                        await supabase.from('packs').update({ price: offer.price.value }).eq('id', packId);
                     }
                 }
             } catch (err: any) {

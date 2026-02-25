@@ -16,7 +16,8 @@ export async function initiateSequraPayment(linkId: string) {
         .select(`
             *,
             student:students(*),
-            pack:packs(*)
+            pack:packs(*),
+            offer:pack_offers(*)
         `)
         .eq('id', linkId)
         .single();
@@ -35,7 +36,12 @@ export async function initiateSequraPayment(linkId: string) {
         throw new Error('Datos del link incompletos');
     }
 
-    // 2. Create Pending Sale Record
+    // 2. Determine price and name (Use Offer if selected, else fallback to Pack)
+    const activePrice = paymentLink.offer?.price ?? paymentLink.pack.price;
+    const activeName = paymentLink.offer?.name ? `${paymentLink.pack.name} - ${paymentLink.offer.name}` : paymentLink.pack.name;
+    const activeReference = paymentLink.offer?.external_id || paymentLink.offer?.id || paymentLink.pack.id;
+
+    // 3. Create Pending Sale Record
     // We create a sale with status 'pending' to track this attempt.
     const { data: sale, error: saleError } = await supabase
         .from('sales')
@@ -43,10 +49,10 @@ export async function initiateSequraPayment(linkId: string) {
             student_id: paymentLink.student.id,
             pack_id: paymentLink.pack.id,
             gateway: 'sequra',
-            total_amount: paymentLink.pack.price,
+            total_amount: activePrice,
             amount_collected: 0,
             status: 'pending',
-            metadata: paymentLink.metadata,
+            metadata: { ...paymentLink.metadata, pack_offer_id: paymentLink.pack_offer_id },
             transaction_id: `PENDING_SEQURA_${Date.now()}`,
             sequra_payment_status: {
                 initial_70: false,
@@ -81,14 +87,14 @@ export async function initiateSequraPayment(linkId: string) {
             order_ref_1: saleRecord.id, // Our Sale ID
             items: [
                 {
-                    reference: paymentLink.pack.id,
-                    name: paymentLink.pack.name,
-                    price_with_tax: Math.round(paymentLink.pack.price * 100), // cents
+                    reference: activeReference,
+                    name: activeName,
+                    price_with_tax: Math.round(activePrice * 100), // cents
                     quantity: 1,
-                    total_with_tax: Math.round(paymentLink.pack.price * 100),
+                    total_with_tax: Math.round(activePrice * 100),
                 }
             ],
-            order_total_with_tax: Math.round(paymentLink.pack.price * 100),
+            order_total_with_tax: Math.round(activePrice * 100),
         },
         delivery_address: {
             // Optional but good if we had it. We don't have address in Student model yet.
