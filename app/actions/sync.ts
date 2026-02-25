@@ -71,7 +71,7 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
             // We use standard string matching (case-insensitive if possible, but exact is safer)
             const { data: existingPacks, error: packSearchError } = await (supabase
                 .from('packs') as any)
-                .select('id, name')
+                .select('id, name, is_active')
                 .eq('name', p.name)
                 .limit(1);
 
@@ -79,6 +79,12 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
 
             if (existingPacks && existingPacks.length > 0) {
                 packId = existingPacks[0].id;
+                // Make sure the pack is active, in case it was previously deleted/deactivated
+                if (!existingPacks[0].is_active) {
+                    await (supabase.from('packs') as any)
+                        .update({ is_active: true })
+                        .eq('id', packId);
+                }
             } else {
                 // Completely new Pack
                 const { data: newPack, error: insertPackError } = await (supabase
