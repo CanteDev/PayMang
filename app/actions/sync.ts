@@ -40,18 +40,24 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
 
         if (existingOffer) {
             // EXISTS: Update price and ensure it is active
+            // Do not overwrite price if the incoming price is 0 (e.g., Hotmart default)
+            const updatePayload: any = {
+                is_active: true,
+                updated_at: new Date().toISOString()
+            };
+
+            if (p.price > 0 || gateway === 'stripe') {
+                updatePayload.price = p.price;
+            }
+
             const { error: updateError } = await (supabase
                 .from('pack_offers') as any)
-                .update({
-                    price: p.price,
-                    is_active: true,
-                    updated_at: new Date().toISOString()
-                })
+                .update(updatePayload)
                 .eq('id', existingOffer.id);
 
             if (updateError) {
                 console.error(`Error updating offer ${existingOffer.id}:`, updateError);
-            } else if (existingOffer.price !== p.price) {
+            } else if (updatePayload.price !== undefined && existingOffer.price !== updatePayload.price) {
                 updatedCount++;
             }
         } else {
