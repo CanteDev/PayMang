@@ -47,30 +47,68 @@ export default function AdminPaymentsPage() {
     const loadSales = async () => {
         setLoading(true);
         try {
-            let query = supabase
-                .from('all_transactions')
-                .select('*', { count: 'exact' })
-                .order('created_at', { ascending: false });
-
-            // Server-side filter
-            if (gatewayFilter !== 'all') {
-                if (gatewayFilter === 'manual') {
-                    query = query.eq('type', 'manual');
-                } else {
-                    query = query.eq('gateway', gatewayFilter);
-                }
-            }
-
-            // Pagination
             const from = (page - 1) * PAGE_SIZE;
             const to = from + PAGE_SIZE - 1;
-            query = query.range(from, to);
 
-            const { data, error, count } = await query;
+            if (gatewayFilter === 'manual') {
+                // Manual payments: read from payments table (installments marked as paid manually)
+                const { data, error, count } = await (supabase as any)
+                    .from('payments')
+                    .select(`
+                        id, amount, method, status, created_at, paid_at,
+                        student:students!student_id(full_name, email)
+                    `, { count: 'exact' })
+                    .eq('status', 'paid')
+                    .not('method', 'in', '("stripe","hotmart","sequra","klarna")')
+                    .order('paid_at', { ascending: false })
+                    .range(from, to);
 
-            if (error) throw error;
-            setSales(data as any || []);
-            setTotalCount(count || 0);
+                if (error) throw error;
+                const mapped = (data || []).map((p: any) => ({
+                    id: p.id,
+                    amount: p.amount,
+                    gateway: p.method || 'manual',
+                    status: 'paid',
+                    created_at: p.paid_at || p.created_at,
+                    type: 'manual',
+                    student_name: p.student?.full_name,
+                    student_email: p.student?.email,
+                    pack_name: null,
+                }));
+                setSales(mapped);
+                setTotalCount(count || 0);
+            } else {
+                // Gateway sales: read only from sales table
+                let query = (supabase as any)
+                    .from('sales')
+                    .select(`
+                        id, total_amount, amount_collected, gateway, status, created_at, metadata,
+                        student:students!student_id(full_name, email),
+                        pack:packs!pack_id(name)
+                    `, { count: 'exact' })
+                    .order('created_at', { ascending: false });
+
+                if (gatewayFilter !== 'all') {
+                    query = query.eq('gateway', gatewayFilter);
+                }
+                query = query.range(from, to);
+                const { data, error, count } = await query;
+                if (error) throw error;
+
+                const mapped = (data || []).map((s: any) => ({
+                    id: s.id,
+                    amount: s.amount_collected || s.total_amount,
+                    gateway: s.gateway,
+                    status: s.status,
+                    created_at: s.created_at,
+                    type: 'sale',
+                    student_name: s.student?.full_name,
+                    student_email: s.student?.email,
+                    pack_name: s.pack?.name,
+                }));
+                setSales(mapped);
+                setTotalCount(count || 0);
+            }
         } catch (err: any) {
             console.error('Error loading sales:', err);
             setError(err.message || 'Error al cargar el historial de pagos');
