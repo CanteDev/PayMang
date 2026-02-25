@@ -60,18 +60,71 @@ export async function POST(request: NextRequest) {
 /**
  * Manejar compra completada
  */
-/**
- * Manejar compra completada
- */
 async function handlePurchaseComplete(data: any) {
     const supabase = getSupabaseAdmin();
 
-    // Extract link_id from Hotmart payload (src or custom_fields)
-    const customFields = data.purchase?.custom_fields || {};
-    const linkId = data.purchase?.src || customFields.link_id || data.purchase?.sck;
-
     const transactionId = data.purchase?.transaction || data.purchase?.payment_id || '';
     const totalAmount = data.purchase?.price?.value;
+
+    // Extract Smart Installments info (Pago Inteligente / Suscripciones)
+    const recurrenceNumber = data.purchase?.recurrence_number;
+    const subscriptionCode = data.subscription?.subscriber?.code || data.subscription?.plan?.id;
+
+    console.log(`Hotmart Webhook - Purchase Approved: Tx ${transactionId}, Recurrence ${recurrenceNumber || 1}`);
+
+    // Si es un cobro recurrente (> 1)
+    if (recurrenceNumber && recurrenceNumber > 1) {
+        if (!subscriptionCode) {
+            console.error('Recurrent payment received but no subscription code found in payload');
+            return;
+        }
+
+        console.log(`Procesando cuota recurrente #${recurrenceNumber} para suscripción ${subscriptionCode}`);
+
+        // Buscar la venta original por cód. de suscripción o transacción
+        const { data: originalSale, error: searchError } = await supabase
+            .from('sales')
+            .select('*')
+            .eq('gateway', 'hotmart')
+            .filter('metadata->>hotmart_subscription_code', 'eq', subscriptionCode)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .single();
+
+        if (searchError || !originalSale) {
+            console.error('No se encontró la Venta original para la suscripción recurrente:', subscriptionCode);
+            // Si quieres que quede registrada igualmente, podrías crearla pero romperías la trazabilidad.
+            // Lo más sano es ignorarla o guardarla en una tabla de incidencias, por ahora hacemos return.
+            return;
+        }
+
+        // Sumar al amount_collected
+        const newCollected = Number(originalSale.amount_collected || 0) + Number(totalAmount || 0);
+        await supabase
+            .from('sales')
+            .update({
+                amount_collected: newCollected,
+                updated_at: new Date().toISOString()
+            } as any)
+            .eq('id', originalSale.id);
+
+        // Crear las comisiones del este hito (milestone)
+        await createCommissions({
+            saleId: originalSale.id,
+            totalAmount: totalAmount, // Solo la cantidad de ESTA cuota
+            coachId: originalSale.metadata?.coach_id,
+            closerId: originalSale.metadata?.closer_id,
+            setterId: originalSale.metadata?.setter_id,
+            milestoneNumber: recurrenceNumber
+        });
+
+        console.log(`✅ Hotmart installment #${recurrenceNumber} for sale ${originalSale.id} processed appended to original.`);
+        return;
+    }
+
+    // SI ES EL PRIMER PAGO (O UN PAGO ÚNICO SIN RECURRENCIA) Sigamos el flujo original:
+    const customFields = data.purchase?.custom_fields || {};
+    const linkId = data.purchase?.src || customFields.link_id || data.purchase?.sck;
 
     if (!linkId) {
         console.error('Link ID not found in Hotmart purchase data');
@@ -90,24 +143,21 @@ async function handlePurchaseComplete(data: any) {
         return;
     }
 
-    // Retrieve data from the link record, not from Hotmart payload
     const studentId = link.student_id;
     const packId = link.pack_id;
     const offerId = link.pack_offer_id;
 
-    // Metadata in link contains agent IDs
     const { coach_id, closer_id, setter_id } = link.metadata || {};
-
     const packPrice = link.offer?.price || link.pack?.price || totalAmount;
 
-    // 2. Create sale
+    // 2. Create sale, inyectando meta de suscripción si la hay
     const { data: sale, error: saleError } = await supabase
         .from('sales')
         .insert({
             student_id: studentId,
             pack_id: packId,
-            total_amount: packPrice,
-            amount_collected: packPrice,
+            total_amount: packPrice, // Lo que cuesta en total el pack
+            amount_collected: totalAmount, // Lo que ha pagado HOY
             gateway: 'hotmart',
             transaction_id: transactionId,
             status: 'paid',
@@ -118,10 +168,12 @@ async function handlePurchaseComplete(data: any) {
                 coach_id: coach_id,
                 closer_id: closer_id,
                 setter_id: setter_id,
-                link_id: linkId, // Keep track of origin link
-                pack_offer_id: offerId
+                link_id: linkId,
+                pack_offer_id: offerId,
+                hotmart_subscription_code: subscriptionCode, // CLAVE PARA FUTURAS CUOTAS
+                hotmart_recurrence_number: recurrenceNumber || 1
             },
-        })
+        } as any)
         .select()
         .single();
 
@@ -136,16 +188,17 @@ async function handlePurchaseComplete(data: any) {
         .update({ status: 'paid' })
         .eq('id', linkId);
 
-    // 4. Create commissions
+    // 4. Create commissions (Milestone 1 by default now)
     await createCommissions({
         saleId: sale.id,
-        totalAmount: packPrice,
+        totalAmount: totalAmount, // Comisionamos sobre lo pagado HOY
         coachId: coach_id,
         closerId: closer_id,
         setterId: setter_id,
+        milestoneNumber: 1
     });
 
-    console.log(`✅ Hotmart sale ${sale.id} processed and commissions created`);
+    console.log(`✅ Hotmart FIRST sale ${sale.id} processed and initial commissions created`);
 }
 
 /**
@@ -196,12 +249,14 @@ async function createCommissions({
     coachId,
     closerId,
     setterId,
+    milestoneNumber = 1
 }: {
     saleId: string;
     totalAmount: number;
-    coachId: string;
-    closerId: string;
+    coachId?: string;
+    closerId?: string;
     setterId?: string;
+    milestoneNumber?: number;
 }) {
     const supabase = getSupabaseAdmin();
     const commissions: any[] = [];
@@ -214,7 +269,7 @@ async function createCommissions({
             role_at_sale: 'coach',
             amount: await calculateCommission(totalAmount, 'coach'),
             status: 'pending',
-            milestone: 1,
+            milestone: milestoneNumber,
         });
     }
 
@@ -226,7 +281,7 @@ async function createCommissions({
             role_at_sale: 'closer',
             amount: await calculateCommission(totalAmount, 'closer'),
             status: 'pending',
-            milestone: 1,
+            milestone: milestoneNumber,
         });
     }
 
@@ -238,7 +293,7 @@ async function createCommissions({
             role_at_sale: 'setter',
             amount: await calculateCommission(totalAmount, 'setter'),
             status: 'pending',
-            milestone: 1,
+            milestone: milestoneNumber,
         });
     }
 
@@ -251,5 +306,5 @@ async function createCommissions({
         throw error;
     }
 
-    console.log(`✅ ${commissions.length} comisiones creadas para venta ${saleId}`);
+    console.log(`✅ ${commissions.length} comisiones (milestone ${milestoneNumber}) creadas para venta ${saleId}`);
 }

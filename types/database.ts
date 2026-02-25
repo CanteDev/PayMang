@@ -106,6 +106,9 @@ export interface Sale {
         closer_id?: string;
         coach_id?: string;
         setter_id?: string;
+        hotmart_subscription_code?: string;
+        hotmart_recurrence_number?: number;
+        [key: string]: any; // Allow arbitrary metadata
     };
     sequra_order_ref?: string;
     sequra_payment_status?: {
