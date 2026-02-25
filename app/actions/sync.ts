@@ -30,13 +30,17 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
     for (const p of products) {
         processedIds.add(p.external_id);
 
-        // 1. Check if offer exists
-        const { data: existingOffer, error: offerSearchError } = await (supabase
-            .from('pack_offers') as any)
-            .select('id, pack_id, price')
-            .eq('gateway', gateway)
-            .eq('external_id', p.external_id)
-            .single();
+        // 1. Check if offer exists (Solo para Stripe/Sequra, Hotmart API solo devuelve Productos, no Ofertas comerciales)
+        let existingOffer = null;
+        if (gateway !== 'hotmart') {
+            const { data: eo } = await (supabase
+                .from('pack_offers') as any)
+                .select('id, pack_id, price')
+                .eq('gateway', gateway)
+                .eq('external_id', p.external_id)
+                .single();
+            existingOffer = eo;
+        }
 
         if (existingOffer) {
             // EXISTS: Update price and ensure it is active
@@ -90,24 +94,28 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
                 packId = newPack.id;
             }
 
-            // Insert new Pack Offer
-            const { error: insertOfferError } = await (supabase
-                .from('pack_offers') as any)
-                .insert({
-                    pack_id: packId,
-                    gateway: gateway,
-                    name: `${p.name} (${gateway.charAt(0).toUpperCase() + gateway.slice(1)})`,
-                    price: p.price,
-                    currency: p.currency,
-                    external_id: p.external_id,
-                    checkout_url: p.checkout_url || '',
-                    is_active: true
-                });
+            // Insert new Pack Offer (Skip for Hotmart, since Hotmart "Products" are just structural Packs, not priced Offers)
+            if (gateway !== 'hotmart') {
+                const { error: insertOfferError } = await (supabase
+                    .from('pack_offers') as any)
+                    .insert({
+                        pack_id: packId,
+                        gateway: gateway,
+                        name: `${p.name} (${gateway.charAt(0).toUpperCase() + gateway.slice(1)})`,
+                        price: p.price,
+                        currency: p.currency,
+                        external_id: p.external_id,
+                        checkout_url: p.checkout_url || '',
+                        is_active: true
+                    });
 
-            if (insertOfferError) {
-                console.error(`Error creating new offer for ${p.external_id}:`, insertOfferError);
+                if (insertOfferError) {
+                    console.error(`Error creating new offer for ${p.external_id}:`, insertOfferError);
+                } else {
+                    newCount++;
+                }
             } else {
-                newCount++;
+                newCount++; // Count the pack creation as a success even if no offer is auto-generated
             }
         }
     }
