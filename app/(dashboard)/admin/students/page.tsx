@@ -30,6 +30,11 @@ interface Student {
         status: string;
         due_date: string;
     }[];
+    sales?: {
+        amount_collected: number;
+        status: string;
+        gateway: string;
+    }[];
 }
 
 export default function AdminStudentsPage() {
@@ -73,7 +78,8 @@ export default function AdminStudentsPage() {
                 .select(`
                     *,
                     coach:profiles!assigned_coach_id(full_name),
-                    payments(amount, status, due_date)
+                    payments(amount, status, due_date),
+                    sales(amount_collected, status, gateway)
                 `)
                 .order('created_at', { ascending: false });
 
@@ -130,14 +136,24 @@ export default function AdminStudentsPage() {
         const totalAgreed = student.agreed_price || 0;
         if (totalAgreed === 0) return { paid: 0, total: 0, percentage: 0 };
 
-        const paidRaw = student.payments
+        // Sum gateway sales (Stripe, Hotmart, Sequra, etc.)
+        const gatewaySales = student.sales
+            ?.filter(s => s.status === 'paid')
+            .reduce((sum, s) => sum + (s.amount_collected || 0), 0) || 0;
+
+        // Sum manual payments (only those NOT from a gateway, to avoid double counting)
+        const manualPaid = student.payments
             ?.filter(p => p.status === 'paid')
             .reduce((sum, p) => sum + p.amount, 0) || 0;
 
-        let paid = Number(paidRaw.toFixed(2));
+        // Use gateway sales if they exist, otherwise fall back to manual payments
+        // (A student with a gateway sale and a manual payment - use the greater value to avoid double count)
+        const paidRaw = gatewaySales > 0 ? gatewaySales + manualPaid : manualPaid;
+
+        let paid = Number(Math.min(paidRaw, totalAgreed).toFixed(2));
         const total = Number(totalAgreed.toFixed(2));
 
-        // Auto-correct 1-5 cent divisional variances (e.g. 2500 / 3 = 833.33 * 3 = 2499.99)
+        // Auto-correct 1-5 cent divisional variances
         if (total > 0 && Math.abs(total - paid) <= 0.05) {
             paid = total;
         }

@@ -5,7 +5,6 @@ import { CONFIG } from '@/config/app.config';
 import { calculateCommission } from '@/lib/commissions/calculator';
 import Stripe from 'stripe';
 import { getGatewayConfig } from '@/lib/settings-helper';
-import { syncGatewayPaymentToInstallments } from '@/lib/payments-updater';
 
 /**
  * Helper to get Service Role Client
@@ -146,9 +145,6 @@ async function handleCheckoutCompleted(session: any) {
         return;
     }
 
-    // 2.5 Sincronizar pago con las cuotas (installments/payments tab)
-    await syncGatewayPaymentToInstallments(supabase, studentId, totalAmount, 'stripe');
-
     // 3. Actualizar estado del link
     await supabase
         .from('payment_links')
@@ -226,9 +222,6 @@ async function handleInvoicePaid(invoice: any) {
         } as any)
         .eq('id', originalSale.id);
 
-    // 3.5 Sincronizar pago con las cuotas (installments/payments tab)
-    await syncGatewayPaymentToInstallments(supabase, originalSale.student_id, amountPaid, 'stripe');
-
     // 4. Crear comisiones para esta nueva cuota
     await createCommissions({
         saleId: originalSale.id,
@@ -304,7 +297,7 @@ async function createCommissions({
             sale_id: saleId,
             agent_id: coachId,
             role_at_sale: 'coach',
-            amount: calculateCommission(totalAmount, 'coach'),
+            amount: await calculateCommission(totalAmount, 'coach'),
             status: 'pending',
             milestone: milestoneNumber,
         });
@@ -316,7 +309,7 @@ async function createCommissions({
             sale_id: saleId,
             agent_id: closerId,
             role_at_sale: 'closer',
-            amount: calculateCommission(totalAmount, 'closer'),
+            amount: await calculateCommission(totalAmount, 'closer'),
             status: 'pending',
             milestone: milestoneNumber,
         });
@@ -328,7 +321,7 @@ async function createCommissions({
             sale_id: saleId,
             agent_id: setterId,
             role_at_sale: 'setter',
-            amount: calculateCommission(totalAmount, 'setter'),
+            amount: await calculateCommission(totalAmount, 'setter'),
             status: 'pending',
             milestone: milestoneNumber,
         });

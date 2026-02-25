@@ -33,6 +33,7 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [payments, setPayments] = useState<Payment[]>([]);
+    const [gatewaySales, setGatewaySales] = useState<any[]>([]);
     const [totalPaidFromTransactions, setTotalPaidFromTransactions] = useState(0);
 
     // Manual Payment Form
@@ -54,22 +55,28 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
     const loadPayments = async () => {
         setLoading(true);
 
-        // 1. Fetch installments (all from payments table)
+        // 1. Fetch manual installments from payments table
         const { data: paymentsData } = await supabase
             .from('payments')
             .select('*')
             .eq('student_id', student.id)
             .order('due_date', { ascending: true });
 
-        if (paymentsData) {
-            setPayments(paymentsData);
-            const total = paymentsData
-                .filter((p: any) => p.status === 'paid')
-                .reduce((sum, p: any) => sum + (Number(p.amount) || 0), 0);
-            setTotalPaidFromTransactions(total);
-        } else {
-            setTotalPaidFromTransactions(0);
-        }
+        // 2. Fetch gateway sales
+        const { data: salesData } = await (supabase
+            .from('sales') as any)
+            .select('id, amount_collected, status, gateway, created_at, metadata')
+            .eq('student_id', student.id)
+            .eq('status', 'paid')
+            .order('created_at', { ascending: true });
+
+        if (paymentsData) setPayments(paymentsData);
+        if (salesData) setGatewaySales(salesData);
+
+        // 3. Compute total paid = gateway sales + manual payments (status=paid)
+        const gatewayTotal = (salesData || []).reduce((sum: number, s: any) => sum + (Number(s.amount_collected) || 0), 0);
+        const manualTotal = (paymentsData || []).filter((p: any) => p.status === 'paid').reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+        setTotalPaidFromTransactions(Math.min(gatewayTotal + manualTotal, student.agreed_price));
 
         setLoading(false);
     };
@@ -251,15 +258,41 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                         </div>
                     )}
 
-                    {/* Payments List */}
+                    {/* Gateway Sales List */}
+                    {gatewaySales.length > 0 && (
+                        <div className="space-y-3 mb-4">
+                            <h4 className="text-sm font-medium text-blue-700">Pagos por Pasarela</h4>
+                            {gatewaySales.map((sale: any) => (
+                                <div key={sale.id} className="flex items-center justify-between p-3 rounded-lg border bg-blue-50 border-blue-100">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="p-2 rounded-full bg-blue-100 text-blue-600">
+                                            <Check className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-gray-900">{Number(sale.amount_collected).toFixed(2)}€</p>
+                                            <p className="text-xs text-gray-500 capitalize">{sale.gateway}</p>
+                                            <p className="text-xs text-gray-400">
+                                                Recibido: {new Date(sale.created_at).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700 font-medium capitalize">{sale.gateway}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Manual Installments List */}
                     <div className="space-y-3">
+                        {payments.length > 0 && <h4 className="text-sm font-medium text-gray-600">Cuotas / Pagos Manuales</h4>}
                         {loading && <p className="text-center text-gray-500 py-4">Cargando pagos...</p>}
-                        {!loading && payments.length === 0 && (
+                        {!loading && payments.length === 0 && gatewaySales.length === 0 && (
                             <p className="text-center text-gray-500 py-8 border border-dashed rounded-lg">
                                 No hay pagos registrados ni planificados.
                             </p>
                         )}
                         {payments.map((payment) => (
+
                             <div
                                 key={payment.id}
                                 className={`flex items-center justify-between p-3 rounded-lg border ${payment.status === 'paid' ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-100 opacity-80'

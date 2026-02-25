@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getGatewayConfig } from '@/lib/settings-helper';
-import { syncGatewayPaymentToInstallments } from '@/lib/payments-updater';
 import { createClient } from '@supabase/supabase-js';
 import { CONFIG } from '@/config/app.config';
 import { getOrder } from '@/lib/sequra/client';
@@ -103,13 +101,6 @@ export async function GET(request: Request) {
                             updated_at: new Date().toISOString() // Force update
                         })
                         .eq('id', sale.id);
-
-                    // Sincronizar pago con las cuotas
-                    // Extraer solo la diferencia para marcar los plazos correspondientes
-                    const amountToSync = amountCollected - sale.amount_collected;
-                    if (amountToSync > 0) {
-                        await syncGatewayPaymentToInstallments(supabase, sale.student_id, amountToSync, 'sequra');
-                    }
 
                     updates.push({ id: sale.id, state, amountCollected });
                 }
