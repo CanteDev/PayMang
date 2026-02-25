@@ -71,10 +71,13 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                 res = await processHotmartSync();
             }
             if (res && res.success) {
+                const sRes = res as any;
                 toast.success(<div className="flex flex-col gap-1">
                     <span>Sincronización completada</span>
-                    <span className="text-xs opacity-90">{res.newCount} añadidos, {res.updatedCount} actualizados, {res.deactivatedCount} desactivados.</span>
+                    <span className="text-xs opacity-90">{sRes.newCount} añadidos, {sRes.updatedCount} actualizados, {sRes.deactivatedCount} desactivados.</span>
                 </div>);
+            } else if (res && !res.success) {
+                toast.error(`Error de la pasarela: ${(res as any).error}`);
             }
         } catch (error: any) {
             console.error(error);

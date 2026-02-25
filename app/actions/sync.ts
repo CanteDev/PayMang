@@ -19,7 +19,7 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
 
     // Verify Admin
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Usuario no autenticado');
+    if (!user) return { success: false, error: 'Usuario no autenticado' };
 
     let newCount = 0;
     let updatedCount = 0;
@@ -138,46 +138,51 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
 
 export async function processStripeSync() {
     console.log("Starting Stripe Sync...");
-    const config = await getGatewayConfig('stripe');
-    const secretKey = config.secret_key || config.SECRET_KEY;
+    try {
+        const config = await getGatewayConfig('stripe');
+        const secretKey = config.secret_key || config.SECRET_KEY;
 
-    if (!secretKey) throw new Error('Stripe API Key no configurada');
+        if (!secretKey) return { success: false, error: 'Stripe API Key no configurada' };
 
-    const stripe = new Stripe(secretKey, { apiVersion: '2023-10-16' as any });
+        const stripe = new Stripe(secretKey, { apiVersion: '2023-10-16' as any });
 
-    // Fetch active products
-    const productsResponse = await stripe.products.list({ active: true, limit: 100 });
-    const pricesResponse = await stripe.prices.list({ active: true, limit: 100 });
+        // Fetch active products
+        const productsResponse = await stripe.products.list({ active: true, limit: 100 });
+        const pricesResponse = await stripe.prices.list({ active: true, limit: 100 });
 
-    const standardizedProducts: StandardizedProduct[] = [];
+        const standardizedProducts: StandardizedProduct[] = [];
 
-    for (const prod of productsResponse.data) {
-        const prodPrices = pricesResponse.data.filter((pri: any) => pri.product === prod.id);
+        for (const prod of productsResponse.data) {
+            const prodPrices = pricesResponse.data.filter((pri: any) => pri.product === prod.id);
 
-        for (const price of prodPrices) {
-            let nameSuffix = '';
-            if (price.type === 'recurring') {
-                nameSuffix = ` (${price.recurring?.interval_count} ${price.recurring?.interval})`;
+            for (const price of prodPrices) {
+                let nameSuffix = '';
+                if (price.type === 'recurring') {
+                    nameSuffix = ` (${price.recurring?.interval_count} ${price.recurring?.interval})`;
+                }
+
+                standardizedProducts.push({
+                    external_id: prod.id, // Using product ID as the main anchor. Note: If a product has multiple active prices, this might conflict.
+                    // To be safer, we should anchor by Product ID, or a composite. We will just use the product ID and first price to be safe, or just append price id if multiple.
+                    // Since user has 1 product to 1 payment link logic generally, we will just use prod.id. 
+                    // If there are multiple prices for 1 product, we differentiate external_id by appending price.id
+                    name: prodPrices.length > 1 ? `${prod.name}${nameSuffix}` : prod.name,
+                    description: prod.description || undefined,
+                    price: parseFloat(price.unit_amount_decimal || '0') / 100,
+                    currency: price.currency.toUpperCase()
+                });
+                break; // Usually 1 active price per product in standard setups. We break here. Replace logic if needed.
             }
-
-            standardizedProducts.push({
-                external_id: prod.id, // Using product ID as the main anchor. Note: If a product has multiple active prices, this might conflict.
-                // To be safer, we should anchor by Product ID, or a composite. We will just use the product ID and first price to be safe, or just append price id if multiple.
-                // Since user has 1 product to 1 payment link logic generally, we will just use prod.id. 
-                // If there are multiple prices for 1 product, we differentiate external_id by appending price.id
-                name: prodPrices.length > 1 ? `${prod.name}${nameSuffix}` : prod.name,
-                description: prod.description || undefined,
-                price: parseFloat(price.unit_amount_decimal || '0') / 100,
-                currency: price.currency.toUpperCase()
-            });
-            break; // Usually 1 active price per product in standard setups. We break here. Replace logic if needed.
         }
+
+        // Ensure unique external IDs in case of multiples
+        const uniqueProducts = Array.from(new Map(standardizedProducts.map(p => [p.external_id, p])).values());
+
+        return await syncGatewayProducts('stripe', uniqueProducts);
+    } catch (e: any) {
+        console.error("Stripe Sync API Error:", e.message);
+        return { success: false, error: `Error conectando con Stripe API: ${e.message}` };
     }
-
-    // Ensure unique external IDs in case of multiples
-    const uniqueProducts = Array.from(new Map(standardizedProducts.map(p => [p.external_id, p])).values());
-
-    return await syncGatewayProducts('stripe', uniqueProducts);
 }
 
 export async function processHotmartSync() {
@@ -189,7 +194,8 @@ export async function processHotmartSync() {
 
     try {
         // Using the request wrapper built in hotmart.ts
-        const response: any = await hotmart.request('/product/rest/v1/products', {
+        // Must use absolute URL to bypass the `payments/v1` base URL defined in the wrapper
+        const response: any = await hotmart.request('https://developers.hotmart.com/products/api/v1/products', {
             method: 'GET'
         });
 
@@ -205,6 +211,6 @@ export async function processHotmartSync() {
         return await syncGatewayProducts('hotmart', standardizedProducts);
     } catch (e: any) {
         console.error("Hotmart Sync API Error:", e.message);
-        throw new Error(`Error conectando con Hotmart API: ${e.message}`);
+        return { success: false, error: `Error conectando con Hotmart API: ${e.message}` };
     }
 }
