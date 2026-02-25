@@ -61,16 +61,18 @@ export async function GET(
 
 
         // 3. Construir URL de pago según la pasarela
+        const origin = request.nextUrl.origin;
         const paymentUrl = await buildPaymentUrl(
             link.gateway || 'stripe', // Default to Stripe
             link.student,
             link.pack,
             link.offer,
-            { link_id: link.id, coach_id: link.created_by, metadata: link.metadata }
+            { link_id: link.id, coach_id: link.created_by, metadata: link.metadata },
+            origin
         );
 
         if (!paymentUrl) {
-            return NextResponse.redirect(`${CONFIG.APP.URL}/error?message=payment_url_error`);
+            return NextResponse.redirect(`${origin}/error?message=payment_url_error`);
         }
 
         // 4. Redirigir a la pasarela
@@ -87,15 +89,16 @@ async function buildPaymentUrl(
     student: any,
     pack: any,
     offer: any,
-    metadata: any
+    metadata: any,
+    origin: string
 ): Promise<string | null> {
     switch (gateway) {
         case 'stripe':
-            return await buildStripeUrl(student, pack, offer, metadata);
+            return await buildStripeUrl(student, pack, offer, metadata, origin);
         case 'hotmart':
-            return buildHotmartUrl(student, pack, offer, metadata);
+            return buildHotmartUrl(student, pack, offer, metadata, origin);
         case 'sequra':
-            return buildSeQuraUrl(student, pack, metadata);
+            return buildSeQuraUrl(student, pack, metadata, origin);
         default:
             return null;
     }
@@ -103,7 +106,7 @@ async function buildPaymentUrl(
 
 import { getGatewayConfig } from '@/lib/settings-helper';
 
-async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any): Promise<string | null> {
+async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any, origin: string): Promise<string | null> {
     const config = await getGatewayConfig('stripe');
 
     if (!config.secret_key) {
@@ -143,8 +146,8 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
                 },
             ],
             mode: 'payment',
-            success_url: `${CONFIG.APP.URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${CONFIG.APP.URL}/cancel`,
+            success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${origin}/cancel`,
             customer_email: student.email,
             metadata: {
                 link_id: metadata.link_id,
@@ -164,7 +167,7 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
     }
 }
 
-async function buildHotmartUrl(student: any, pack: any, offer: any, metadata: any): Promise<string | null> {
+async function buildHotmartUrl(student: any, pack: any, offer: any, metadata: any, origin: string): Promise<string | null> {
 
     // NEW LOGIC WITH OFFERS
     if (offer && offer.checkout_url) {
@@ -187,7 +190,7 @@ async function buildHotmartUrl(student: any, pack: any, offer: any, metadata: an
 
     if (!productCode || !offerCode) {
         console.error('Hotmart product/offer code not configured for pack:', pack.id);
-        return `${CONFIG.APP.URL}/error?message=hotmart_not_configured`;
+        return `${origin}/error?message=hotmart_not_configured`;
     }
 
     const baseUrl = `https://pay.hotmart.com/${productCode}`;
@@ -209,7 +212,7 @@ async function buildHotmartUrl(student: any, pack: any, offer: any, metadata: an
     return finalUrl;
 }
 
-function buildSeQuraUrl(student: any, pack: any, metadata: any): string {
+function buildSeQuraUrl(student: any, pack: any, metadata: any, origin: string): string {
     // Redirect to internal checkout page to handle Sequra's specific flow (Solicitation -> Form)
-    return `${CONFIG.APP.URL}/checkout/sequra/${metadata.link_id}`;
+    return `${origin}/checkout/sequra/${metadata.link_id}`;
 }
