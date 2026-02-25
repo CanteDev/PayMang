@@ -1,4 +1,4 @@
-import { getGatewayConfig } from '@/lib/settings-helper';
+import { getAppConfig } from '@/lib/config/server-config';
 
 interface SequraConfig {
     MERCHANT_ID: string;
@@ -8,15 +8,18 @@ interface SequraConfig {
 }
 
 async function getConfig(): Promise<SequraConfig> {
-    const config = await getGatewayConfig('sequra');
-    // Normalize keys just in case (DB vs Config file casing)
+    const config = await getAppConfig('sequra_config');
+    if (!config) throw new Error('SeQura configuration not found in app_settings');
+
+    const envString = config.environment || config.ENVIRONMENT || 'sandbox';
+
     return {
         MERCHANT_ID: config.merchant_id || config.MERCHANT_ID,
         API_KEY: config.api_key || config.API_KEY,
-        API_URL: config.environment === 'production'
-            ? 'https://live.sequrapi.com' // Check prod URL
+        API_URL: envString === 'production'
+            ? 'https://live.sequrapi.com'
             : 'https://sandbox.sequrapi.com',
-        ENVIRONMENT: config.environment || 'sandbox'
+        ENVIRONMENT: envString
     };
 }
 

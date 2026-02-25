@@ -13,7 +13,8 @@ export const config = {
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
          * - p/ (public payment links - estos no requieren auth)
+         * - checkout/ (public checkout pages like sequra form)
          */
-        '/((?!_next/static|_next/image|favicon.ico|p/|api/webhooks|api/test).*)',
+        '/((?!_next/static|_next/image|favicon.ico|p/|checkout/|api/webhooks|api/test).*)',
     ],
 };
