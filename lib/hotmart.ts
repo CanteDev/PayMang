@@ -42,6 +42,11 @@ export class HotmartClient {
             // Otherwise construct from Client ID + Secret
             let authHeader = config.BASIC_AUTH || config.basic_auth;
 
+            // Auto-prepend 'Basic ' if user only pasted the base64 string
+            if (authHeader && !authHeader.toLowerCase().startsWith('basic ')) {
+                authHeader = `Basic ${authHeader}`;
+            }
+
             if (!authHeader && (config.CLIENT_ID || config.client_id) && (config.CLIENT_SECRET || config.client_secret)) {
                 const clientId = config.CLIENT_ID || config.client_id;
                 const clientSecret = config.CLIENT_SECRET || config.client_secret;
