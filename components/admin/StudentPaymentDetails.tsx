@@ -61,17 +61,15 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
             .eq('student_id', student.id)
             .order('due_date', { ascending: true });
 
-        if (paymentsData) setPayments(paymentsData);
-
-        // 2. Fetch total paid from all_transactions (Sales + Manual)
-        const { data: transData } = await supabase
-            .from('all_transactions')
-            .select('amount')
-            .eq('student_id', student.id)
-            .eq('status', 'paid');
-
-        const total = (transData as any[] || []).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-        setTotalPaidFromTransactions(total);
+        if (paymentsData) {
+            setPayments(paymentsData);
+            const total = paymentsData
+                .filter((p: any) => p.status === 'paid')
+                .reduce((sum, p: any) => sum + (Number(p.amount) || 0), 0);
+            setTotalPaidFromTransactions(total);
+        } else {
+            setTotalPaidFromTransactions(0);
+        }
 
         setLoading(false);
     };
