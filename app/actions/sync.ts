@@ -30,17 +30,13 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
     for (const p of products) {
         processedIds.add(p.external_id);
 
-        // 1. Check if offer exists (Solo para Stripe/Sequra, Hotmart API solo devuelve Productos, no Ofertas comerciales)
-        let existingOffer = null;
-        if (gateway !== 'hotmart') {
-            const { data: eo } = await (supabase
-                .from('pack_offers') as any)
-                .select('id, pack_id, price')
-                .eq('gateway', gateway)
-                .eq('external_id', p.external_id)
-                .single();
-            existingOffer = eo;
-        }
+        // 1. Check if offer exists by external_id (applies to all gateways including Hotmart)
+        const { data: existingOffer } = await (supabase
+            .from('pack_offers') as any)
+            .select('id, pack_id, price')
+            .eq('gateway', gateway)
+            .eq('external_id', p.external_id)
+            .maybeSingle();
 
         if (existingOffer) {
             // EXISTS: Update price and ensure it is active
@@ -104,28 +100,25 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
                 packId = newPack.id;
             }
 
-            // Insert new Pack Offer (Skip for Hotmart, since Hotmart "Products" are just structural Packs, not priced Offers)
-            if (gateway !== 'hotmart') {
-                const { error: insertOfferError } = await (supabase
-                    .from('pack_offers') as any)
-                    .insert({
-                        pack_id: packId,
-                        gateway: gateway,
-                        name: `${p.name} (${gateway.charAt(0).toUpperCase() + gateway.slice(1)})`,
-                        price: p.price,
-                        currency: p.currency,
-                        external_id: p.external_id,
-                        checkout_url: p.checkout_url || '',
-                        is_active: true
-                    });
+            // Insert new Pack Offer for all gateways (including Hotmart)
+            // Use p.price if > 0, otherwise leave price as 0 (admin will set it manually)
+            const { error: insertOfferError } = await (supabase
+                .from('pack_offers') as any)
+                .insert({
+                    pack_id: packId,
+                    gateway: gateway,
+                    name: `${p.name} (${gateway.charAt(0).toUpperCase() + gateway.slice(1)})`,
+                    price: p.price || 0,
+                    currency: p.currency,
+                    external_id: p.external_id,
+                    checkout_url: p.checkout_url || '',
+                    is_active: true
+                });
 
-                if (insertOfferError) {
-                    console.error(`Error creating new offer for ${p.external_id}:`, insertOfferError);
-                } else {
-                    newCount++;
-                }
+            if (insertOfferError) {
+                console.error(`Error creating new offer for ${p.external_id}:`, insertOfferError);
             } else {
-                newCount++; // Count the pack creation as a success even if no offer is auto-generated
+                newCount++;
             }
         }
     }
