@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CONFIG } from '@/config/app.config';
 import { calculateCommission } from '@/lib/commissions/calculator';
+import { syncGatewayPaymentToInstallments } from '@/lib/payments-updater';
 
 /**
  * Helper to get Service Role Client
@@ -181,6 +182,9 @@ async function handlePurchaseComplete(data: any) {
         console.error('Error creating sale:', saleError);
         return;
     }
+
+    // 2.5 Sincronizar cuotas del alumno
+    await syncGatewayPaymentToInstallments(supabase, studentId, totalAmount, 'hotmart');
 
     // 3. Update link status
     await supabase
