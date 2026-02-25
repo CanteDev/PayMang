@@ -89,7 +89,11 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
                 // Completely new Pack
                 const { data: newPack, error: insertPackError } = await (supabase
                     .from('packs') as any)
-                    .insert({ name: p.name, description: p.description || p.name })
+                    .insert({
+                        name: p.name,
+                        description: p.description || p.name,
+                        price: p.price || 0
+                    })
                     .select('id')
                     .single();
 
