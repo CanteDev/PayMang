@@ -118,7 +118,7 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
     // SI HAY OFERTA: Usamos el checkout_url directamente (si lo has importado así en Stripe, aunque típicamente en Stripe generas la session aquí)
     // Pero asumiendo que el "checkout_url" de la oferta tiene el enlace de pago directo o queremos seguir generando la sesión dinámica:
     // Si queremos redirigir a un payment link pre-creado de stripe en checkout_url:
-    if (offer && offer.checkout_url && offer.checkout_url.startsWith('https://')) {
+    if (offer && offer.checkout_url && offer.checkout_url.startsWith('https://') && !offer.checkout_url.includes('...')) {
         // Option A: redirect to pre-existing Stripe Payment Link
         const url = new URL(offer.checkout_url);
         url.searchParams.set('client_reference_id', metadata.link_id);
