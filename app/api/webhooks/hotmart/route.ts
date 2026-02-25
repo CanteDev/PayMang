@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CONFIG } from '@/config/app.config';
 import { calculateCommission } from '@/lib/commissions/calculator';
+import { syncGatewayPaymentToInstallments } from '@/lib/payments-updater';
 
 /**
  * Helper to get Service Role Client
@@ -108,7 +109,10 @@ async function handlePurchaseComplete(data: any) {
             } as any)
             .eq('id', originalSale.id);
 
-        // Crear las comisiones del este hito (milestone)
+        // 3.5 Sincronizar cuotas
+        await syncGatewayPaymentToInstallments(supabase, originalSale.student_id, totalAmount, 'hotmart');
+
+        // 4. Crear comisiones para esta cuota / milestone)
         await createCommissions({
             saleId: originalSale.id,
             totalAmount: totalAmount, // Solo la cantidad de ESTA cuota
@@ -181,6 +185,9 @@ async function handlePurchaseComplete(data: any) {
         console.error('Error creating sale:', saleError);
         return;
     }
+
+    // 2.5 Sincronizar pago con las cuotas
+    await syncGatewayPaymentToInstallments(supabase, studentId, totalAmount, 'hotmart');
 
     // 3. Update link status
     await supabase

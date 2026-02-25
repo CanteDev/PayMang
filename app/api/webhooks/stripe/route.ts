@@ -5,6 +5,7 @@ import { CONFIG } from '@/config/app.config';
 import { calculateCommission } from '@/lib/commissions/calculator';
 import Stripe from 'stripe';
 import { getGatewayConfig } from '@/lib/settings-helper';
+import { syncGatewayPaymentToInstallments } from '@/lib/payments-updater';
 
 /**
  * Helper to get Service Role Client
@@ -145,6 +146,9 @@ async function handleCheckoutCompleted(session: any) {
         return;
     }
 
+    // 2.5 Sincronizar pago con las cuotas (installments/payments tab)
+    await syncGatewayPaymentToInstallments(supabase, studentId, totalAmount, 'stripe');
+
     // 3. Actualizar estado del link
     await supabase
         .from('payment_links')
@@ -221,6 +225,9 @@ async function handleInvoicePaid(invoice: any) {
             updated_at: new Date().toISOString()
         } as any)
         .eq('id', originalSale.id);
+
+    // 3.5 Sincronizar pago con las cuotas (installments/payments tab)
+    await syncGatewayPaymentToInstallments(supabase, originalSale.student_id, amountPaid, 'stripe');
 
     // 4. Crear comisiones para esta nueva cuota
     await createCommissions({
