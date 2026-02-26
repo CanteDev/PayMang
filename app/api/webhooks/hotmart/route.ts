@@ -153,28 +153,14 @@ async function handlePurchaseComplete(data: any) {
 
     // 2. Deduplication: Look for an existing pending sale for this student and pack
     // (This handles the case where the admin pre-assigned the pack during registration)
-    let existingSale = null;
-
-    if (target_sale_id) {
-        // Explicit deduplication using the exact sale ID
-        const { data } = await supabase
-            .from('sales')
-            .select('*')
-            .eq('id', target_sale_id)
-            .single();
-        existingSale = data;
-    } else {
-        // Fallback for legacy links
-        const { data } = await supabase
-            .from('sales')
-            .select('*')
-            .eq('student_id', studentId)
-            .eq('pack_id', packId)
-            .eq('status', 'pending')
-            .limit(1)
-            .single();
-        existingSale = data;
-    }
+    const { data: existingSale } = await supabase
+        .from('sales')
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('pack_id', packId)
+        .eq('status', 'pending')
+        .limit(1)
+        .single();
 
     let sale;
     let saleError;

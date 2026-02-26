@@ -63,28 +63,14 @@ export async function POST(request: NextRequest) {
         const totalAmount = link.offer ? link.offer.price : link.pack.price;
 
         // 2. Deduplication: Look for an existing pending sale
-        let existingSale = null;
-
-        if (target_sale_id) {
-            // New explicit deduplication: we know EXACTLY which sale to update
-            const { data } = await supabase
-                .from('sales')
-                .select('*')
-                .eq('id', target_sale_id)
-                .single();
-            existingSale = data;
-        } else {
-            // Legacy fuzzy deduplication for old links
-            const { data } = await supabase
-                .from('sales')
-                .select('*')
-                .eq('student_id', link.student_id)
-                .eq('pack_id', link.pack_id)
-                .eq('status', 'pending')
-                .limit(1)
-                .single();
-            existingSale = data;
-        }
+        const { data: existingSale } = await supabase
+            .from('sales')
+            .select('*')
+            .eq('student_id', link.student_id)
+            .eq('pack_id', link.pack_id)
+            .eq('status', 'pending')
+            .limit(1)
+            .single();
 
         let sale;
         let saleError;
