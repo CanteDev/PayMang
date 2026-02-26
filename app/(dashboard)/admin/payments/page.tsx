@@ -91,6 +91,10 @@ export default function AdminPaymentsPage() {
                 if (gatewayFilter !== 'all') {
                     query = query.eq('gateway', gatewayFilter);
                 }
+
+                // Hide 'pending' sales (pre-assigned packs) to avoid clutter in payments history
+                query = query.in('status', ['paid', 'refunded']);
+
                 query = query.range(from, to);
                 const { data, error, count } = await query;
                 if (error) throw error;

@@ -59,32 +59,68 @@ export async function POST(request: NextRequest) {
         const { coach_id, closer_id, setter_id } = link.metadata || {};
         const totalAmount = link.pack.price;
 
-        // 2. Crear venta simulada
-        const { data: sale, error: saleError } = await supabase
+        // 2. Deduplication: Look for an existing pending sale
+        const { data: existingSale } = await supabase
             .from('sales')
-            .insert({
-                student_id: link.student_id,
-                pack_id: link.pack_id,
-                total_amount: totalAmount,
-                amount_collected: totalAmount,
-                gateway: link.gateway,
-                transaction_id: `TEST_${Date.now()}_${linkId}`,
-                status: 'paid',
-                metadata: {
-                    test_mode: true,
-                    simulated_at: new Date().toISOString(),
-                },
-            })
-            .select()
+            .select('*')
+            .eq('student_id', link.student_id)
+            .eq('pack_id', link.pack_id)
+            .eq('status', 'pending')
+            .limit(1)
             .single();
 
-        if (saleError) {
-            console.error('Error creando venta simulada:', saleError);
+        let sale;
+        let saleError;
+
+        const salePayload = {
+            student_id: link.student_id,
+            pack_id: link.pack_id,
+            total_amount: totalAmount,
+            amount_collected: totalAmount,
+            gateway: link.gateway,
+            transaction_id: `SIMULATED_${Date.now()}_${linkId}`,
+            status: 'paid',
+            metadata: {
+                test_mode: true,
+                simulated_at: new Date().toISOString(),
+                coach_id,
+                closer_id,
+                setter_id
+            },
+        };
+
+        if (existingSale) {
+            console.log(`[SIM] Found pending sale ${existingSale.id}. Updating.`);
+            const { data: updatedSale, error: updateError } = await supabase
+                .from('sales')
+                .update(salePayload as any)
+                .eq('id', existingSale.id)
+                .select()
+                .single();
+            sale = updatedSale;
+            saleError = updateError;
+        } else {
+            console.log(`[SIM] No pending sale. Creating new.`);
+            const { data: newSale, error: insertError } = await supabase
+                .from('sales')
+                .insert(salePayload as any)
+                .select()
+                .single();
+            sale = newSale;
+            saleError = insertError;
+        }
+
+        if (saleError || !sale) {
+            console.error('Error creating/updating simulated sale:', saleError);
             return NextResponse.json(
-                { error: `Error creando venta: ${saleError.message}`, details: saleError },
+                { error: `Error procesando venta: ${saleError?.message}` },
                 { status: 500 }
             );
         }
+
+        // 2.5 Sync installments (IMPORTANT: now required by logic)
+        const { syncGatewayPaymentToInstallments } = await import('@/lib/payments-updater');
+        await syncGatewayPaymentToInstallments(supabase, link.student_id, sale.id, totalAmount, link.gateway);
 
         // 3. Actualizar link a paid
         await supabase
