@@ -31,13 +31,14 @@ export async function POST(request: NextRequest) {
 
         const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-        // 1. Buscar el payment_link
+        // 1. Buscar el payment_link con relación a la oferta si existe
         const { data: link, error: linkError } = await supabase
             .from('payment_links')
             .select(`
         *,
         student:students(*),
-        pack:packs(*)
+        pack:packs(*),
+        offer:pack_offers(*)
       `)
             .eq('id', linkId)
             .single();
@@ -57,7 +58,9 @@ export async function POST(request: NextRequest) {
         }
 
         const { coach_id, closer_id, setter_id } = link.metadata || {};
-        const totalAmount = link.pack.price;
+
+        // Use offer price if available, fallback to pack price
+        const totalAmount = link.offer ? link.offer.price : link.pack.price;
 
         // 2. Deduplication: Look for an existing pending sale
         const { data: existingSale } = await supabase
