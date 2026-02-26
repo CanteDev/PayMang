@@ -237,8 +237,17 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
 
     // Totals across ALL sales for the header summary
     const globalTotalAgreed = sales.reduce((sum, s) => sum + Number(s.total_amount), 0);
-    const globalTotalPaid = payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + Number(p.amount), 0);
-    const globalTotalOverdue = payments.filter(p => p.status === 'overdue' || (p.status === 'pending' && new Date(p.due_date) < new Date())).reduce((sum, p) => sum + p.amount, 0);
+
+    // Total Paid = Sum of amount_collected from sales (gateways) + manual payments marked as PAID
+    // To avoid double counting, we only sum payments IF they are NOT linked to a gateway 
+    // BUT the current logic in syncGatewayPaymentToInstallments updates payments linked to sales.
+    // The most reliable way: globalTotalPaid = sum(sales.amount_collected)
+    const globalTotalPaid = sales.reduce((sum, s) => sum + Number(s.amount_collected), 0);
+
+    const globalTotalOverdue = payments
+        .filter(p => (p.status === 'overdue' || (p.status === 'pending' && new Date(p.due_date) < new Date())))
+        .reduce((sum, p) => sum + Number(p.amount), 0);
+
     const globalTotalPending = Math.max(0, globalTotalAgreed - globalTotalPaid);
     const globalProgress = globalTotalAgreed > 0 ? Math.round((globalTotalPaid / globalTotalAgreed) * 100) : 0;
 
@@ -483,32 +492,50 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                         )}
                         {!loading && sales.map(sale => {
                             const salePayments = payments.filter(p => p.sale_id === sale.id);
-                            const salePaid = salePayments.filter(p => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
+
+                            // For progress, we trust the amount_collected in the Sale record (synced by webhooks)
+                            const salePaid = Number(sale.amount_collected || 0);
                             const saleProgress = sale.total_amount > 0 ? Math.round((salePaid / sale.total_amount) * 100) : 0;
 
                             return (
                                 <div key={sale.id} className="border border-gray-200 rounded-lg overflow-hidden">
                                     {/* Sale Header */}
                                     <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
-                                        <div>
-                                            <h4 className="font-semibold text-gray-900">{sale.packs?.name || 'Pack Sin Nombre'}</h4>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <h4 className="font-semibold text-gray-900">{sale.packs?.name || 'Pack Sin Nombre'}</h4>
+                                                <Badge variant="outline" className="text-[10px] uppercase">
+                                                    {sale.gateway}
+                                                </Badge>
+                                            </div>
                                             <p className="text-sm text-gray-500">
                                                 Fecha: {new Date(sale.created_at).toLocaleDateString()} |
                                                 Acordado: {sale.total_amount}€ |
                                                 Pagado: {salePaid}€
                                             </p>
                                         </div>
-                                        <Badge variant={salePaid >= sale.total_amount ? "default" : "secondary"}>
-                                            {salePaid >= sale.total_amount ? 'Completado' : `${saleProgress}%`}
-                                        </Badge>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-8 w-8 p-0 ml-2"
-                                            onClick={() => startEditingSale(sale)}
-                                        >
-                                            <Edit2 className="w-4 h-4 text-gray-500" />
-                                        </Button>
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-blue-100/50 px-2 py-1 rounded text-xs font-bold text-blue-700">
+                                                {saleProgress}%
+                                            </div>
+                                            <Badge className={
+                                                salePaid >= sale.total_amount
+                                                    ? "bg-green-100 text-green-700 hover:bg-green-100"
+                                                    : salePaid > 0
+                                                        ? "bg-blue-100 text-blue-700 hover:bg-blue-100"
+                                                        : "bg-gray-100 text-gray-700 hover:bg-gray-100"
+                                            }>
+                                                {salePaid >= sale.total_amount ? 'Completado' : salePaid > 0 ? 'En Pago' : 'Pendiente'}
+                                            </Badge>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-8 w-8 p-0"
+                                                onClick={() => startEditingSale(sale)}
+                                            >
+                                                <Edit2 className="w-4 h-4 text-gray-500" />
+                                            </Button>
+                                        </div>
                                     </div>
 
                                     {/* Edit Sale Form In-place */}
