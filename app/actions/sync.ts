@@ -12,6 +12,7 @@ export interface StandardizedProduct {
     price: number;
     currency: string;
     checkout_url?: string; // If available directly from API
+    is_main_offer?: boolean; // Hotmart flags which offer is the main one
 }
 
 export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', products: StandardizedProduct[]) {
@@ -81,9 +82,11 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
                     updatePayload.is_active = true;
                 }
 
-                // If pack price is 0 (or not set) and this new offer has a price, adopt it as base
-                if ((!existingPacks[0].price || existingPacks[0].price === 0) && p.price > 0) {
-                    updatePayload.price = p.price;
+                // If this new offer is the main offer, or if the pack price is not set, adopt this price as base
+                if (p.is_main_offer || (!existingPacks[0].price || existingPacks[0].price === 0)) {
+                    if (p.price > 0) {
+                        updatePayload.price = p.price;
+                    }
                 }
 
                 if (Object.keys(updatePayload).length > 0) {
@@ -92,13 +95,39 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
                         .eq('id', packId);
                 }
             } else {
+                // Fetch default commission rates
+                let defaultCloserAuth = 8;
+                let defaultCoachAuth = 10;
+                let defaultSetterAuth = 1;
+
+                const { data: comRatesData } = await supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'commission_rates')
+                    .maybeSingle<any>();
+
+                if (comRatesData && comRatesData.value) {
+                    // Usually saved as decimals like 0.08, 0.1, 0.01 in the UI or percentages. Our UI SettingsForm expects decimals * 100 for display, but let's defensively check.
+                    // If it's a decimal < 1, multiply by 100 to store as percentage in the packs table
+                    const valCloser = comRatesData.value.closer || 0.08;
+                    const valCoach = comRatesData.value.coach || 0.10;
+                    const valSetter = comRatesData.value.setter || 0.01;
+
+                    defaultCloserAuth = valCloser < 1 ? valCloser * 100 : valCloser;
+                    defaultCoachAuth = valCoach < 1 ? valCoach * 100 : valCoach;
+                    defaultSetterAuth = valSetter < 1 ? valSetter * 100 : valSetter;
+                }
+
                 // Completely new Pack
                 const { data: newPack, error: insertPackError } = await (supabase
                     .from('packs') as any)
                     .insert({
                         name: p.name,
                         description: p.description || p.name,
-                        price: p.price || 0
+                        price: p.price || 0,
+                        commission_closer: defaultCloserAuth,
+                        commission_coach: defaultCoachAuth,
+                        commission_setter: defaultSetterAuth
                     })
                     .select('id')
                     .single();
@@ -260,7 +289,8 @@ export async function processHotmartSync() {
                                 description: packDesc,
                                 price: offer.price?.value || 0,
                                 currency: offer.price?.currency_code || 'EUR',
-                                checkout_url: `https://pay.hotmart.com/${prod.ucode}?checkoutMode=10&off=${offer.code}`
+                                checkout_url: `https://pay.hotmart.com/${prod.ucode}?checkoutMode=10&off=${offer.code}`,
+                                is_main_offer: offer.is_main_offer === true
                             });
                         }
                     } else {

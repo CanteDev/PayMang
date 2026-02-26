@@ -295,7 +295,7 @@ export default function AdminPacksPage() {
                                                 <TableCell>
                                                     <div>
                                                         <p className="font-medium text-gray-900">{pack.name}</p>
-                                                        {pack.description && (
+                                                        {pack.description && pack.description.trim().toLowerCase() !== pack.name.trim().toLowerCase() && (
                                                             <p className="text-xs text-gray-500 mt-0.5 max-w-xs truncate">
                                                                 {pack.description}
                                                             </p>
