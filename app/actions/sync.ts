@@ -29,152 +29,159 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
     // We will keep track of which external_ids we processed to know which ones to deactivate later
     const processedIds = new Set<string>();
 
+    // ----------------------------------------------------
+    // PHASE 1: Group offers by Pack Name and find Base Price
+    // ----------------------------------------------------
+    const groupedProducts = new Map<string, StandardizedProduct[]>();
     for (const p of products) {
         processedIds.add(p.external_id);
+        if (!groupedProducts.has(p.name)) {
+            groupedProducts.set(p.name, []);
+        }
+        groupedProducts.get(p.name)!.push(p);
+    }
 
-        // 1. Check if offer exists by external_id
-        const { data: existingOffer } = await (supabase
-            .from('pack_offers') as any)
-            .select('id, pack_id, price')
-            .eq('gateway', gateway)
-            .eq('external_id', p.external_id)
-            .maybeSingle();
+    // ----------------------------------------------------
+    // PHASE 2 & 3: Iterate Groups -> Upsert Pack -> Upsert Offers
+    // ----------------------------------------------------
 
-        if (existingOffer) {
-            // EXISTS: Update and ensure it is active.
-            // Do NOT overwrite price if the incoming price is 0 (Hotmart API always returns 0)
-            const updatePayload: any = {
-                is_active: true,
-                updated_at: new Date().toISOString()
-            };
+    // Fetch default commission rates once
+    let defaultCloserAuth = 8;
+    let defaultCoachAuth = 10;
+    let defaultSetterAuth = 1;
 
-            if (p.price > 0 || gateway === 'stripe') {
-                updatePayload.price = p.price;
+    const { data: comRatesData } = await supabase.from('app_settings').select('value').eq('key', 'commission_rates').maybeSingle<any>();
+    if (comRatesData && comRatesData.value) {
+        const valCloser = comRatesData.value.closer || 0.08;
+        const valCoach = comRatesData.value.coach || 0.10;
+        const valSetter = comRatesData.value.setter || 0.01;
+        defaultCloserAuth = valCloser < 1 ? valCloser * 100 : valCloser;
+        defaultCoachAuth = valCoach < 1 ? valCoach * 100 : valCoach;
+        defaultSetterAuth = valSetter < 1 ? valSetter * 100 : valSetter;
+    }
+
+    for (const [packName, offers] of groupedProducts.entries()) {
+
+        // Find best Base Price for this Pack
+        let basePrice = 0;
+        const mainOffer = offers.find(o => o.is_main_offer);
+        if (mainOffer && mainOffer.price > 0) {
+            basePrice = mainOffer.price;
+        } else {
+            // Fallback: lowest positive price
+            const validPrices = offers.map(o => o.price).filter(p => p > 0);
+            if (validPrices.length > 0) {
+                basePrice = Math.min(...validPrices);
+            }
+        }
+
+        const packDescription = offers.find(o => o.description)?.description || packName;
+
+        // -- UPSERT PACK --
+        const { data: existingPacks } = await (supabase.from('packs') as any)
+            .select('id, name, price, is_active')
+            .eq('name', packName)
+            .limit(1);
+
+        let currentPackId = null;
+
+        if (existingPacks && existingPacks.length > 0) {
+            currentPackId = existingPacks[0].id;
+            const updatePayload: any = {};
+
+            if (!existingPacks[0].is_active) {
+                updatePayload.is_active = true;
             }
 
-            if (p.offer_name) {
-                updatePayload.name = p.offer_name;
+            // Only update DB price if it was 0 or unset.
+            if ((!existingPacks[0].price || existingPacks[0].price === 0) && basePrice > 0) {
+                updatePayload.price = basePrice;
             }
 
-            const { error: updateError } = await (supabase
-                .from('pack_offers') as any)
-                .update(updatePayload)
-                .eq('id', existingOffer.id);
-
-            if (updateError) {
-                console.error(`Error updating offer ${existingOffer.id}:`, updateError);
-            } else if (updatePayload.price !== undefined && existingOffer.price !== updatePayload.price) {
-                updatedCount++;
+            if (Object.keys(updatePayload).length > 0) {
+                await (supabase.from('packs') as any).update(updatePayload).eq('id', currentPackId);
             }
         } else {
-            // DOES NOT EXIST: Create or Link Pack, then Create Offer
-
-            // Search for existing pack with EXACT SAME NAME
-            const { data: existingPacks } = await (supabase
-                .from('packs') as any)
-                .select('id, name, is_active')
-                .eq('name', p.name)
-                .limit(1);
-
-            let packId = null;
-
-            if (existingPacks && existingPacks.length > 0) {
-                packId = existingPacks[0].id;
-
-                const updatePayload: any = {};
-                // Make sure the pack is active, in case it was previously deleted/deactivated
-                if (!existingPacks[0].is_active) {
-                    updatePayload.is_active = true;
-                }
-
-                // If this new offer is the main offer, or if the pack price is not set, adopt this price as base
-                if (p.is_main_offer || (!existingPacks[0].price || existingPacks[0].price === 0)) {
-                    if (p.price > 0) {
-                        updatePayload.price = p.price;
-                    }
-                }
-
-                if (Object.keys(updatePayload).length > 0) {
-                    await (supabase.from('packs') as any)
-                        .update(updatePayload)
-                        .eq('id', packId);
-                }
-            } else {
-                // Fetch default commission rates
-                let defaultCloserAuth = 8;
-                let defaultCoachAuth = 10;
-                let defaultSetterAuth = 1;
-
-                const { data: comRatesData } = await supabase
-                    .from('app_settings')
-                    .select('value')
-                    .eq('key', 'commission_rates')
-                    .maybeSingle<any>();
-
-                if (comRatesData && comRatesData.value) {
-                    // Usually saved as decimals like 0.08, 0.1, 0.01 in the UI or percentages. Our UI SettingsForm expects decimals * 100 for display, but let's defensively check.
-                    // If it's a decimal < 1, multiply by 100 to store as percentage in the packs table
-                    const valCloser = comRatesData.value.closer || 0.08;
-                    const valCoach = comRatesData.value.coach || 0.10;
-                    const valSetter = comRatesData.value.setter || 0.01;
-
-                    defaultCloserAuth = valCloser < 1 ? valCloser * 100 : valCloser;
-                    defaultCoachAuth = valCoach < 1 ? valCoach * 100 : valCoach;
-                    defaultSetterAuth = valSetter < 1 ? valSetter * 100 : valSetter;
-                }
-
-                // Completely new Pack
-                const { data: newPack, error: insertPackError } = await (supabase
-                    .from('packs') as any)
-                    .insert({
-                        name: p.name,
-                        description: p.description || p.name,
-                        price: p.price || 0,
-                        commission_closer: defaultCloserAuth,
-                        commission_coach: defaultCoachAuth,
-                        commission_setter: defaultSetterAuth
-                    })
-                    .select('id')
-                    .single();
-
-                if (insertPackError) {
-                    console.error('Error creating new pack:', insertPackError);
-                    continue; // Skip inserting offer if pack creation failed
-                }
-                packId = newPack.id;
-            }
-
-            // Insert new Pack Offer
-            // For Hotmart: price will be 0 (admin sets it manually); existing offers are never overwritten with 0
-            const { error: insertOfferError } = await (supabase
-                .from('pack_offers') as any)
+            // Completely new Pack
+            const { data: newPack, error: insertPackError } = await (supabase.from('packs') as any)
                 .insert({
-                    pack_id: packId,
-                    gateway: gateway,
-                    name: p.offer_name || `${p.name} (${gateway.charAt(0).toUpperCase() + gateway.slice(1)})`,
-                    price: p.price || 0,
-                    currency: p.currency,
-                    external_id: p.external_id,
-                    checkout_url: p.checkout_url || '',
-                    is_active: true
-                });
+                    name: packName,
+                    description: packDescription,
+                    price: basePrice, // Assign our best guess base price directly on creation!
+                    commission_closer: defaultCloserAuth,
+                    commission_coach: defaultCoachAuth,
+                    commission_setter: defaultSetterAuth
+                })
+                .select('id')
+                .single();
 
-            if (insertOfferError) {
-                console.error(`Error creating new offer for ${p.external_id}:`, insertOfferError);
+            if (insertPackError) {
+                console.error('Error creating new pack:', insertPackError);
+                continue; // Skip inserting offers if pack creation failed
+            }
+            currentPackId = newPack.id;
+        }
+
+        // -- UPSERT OFFERS --
+        for (const offer of offers) {
+            const { data: existingOffer } = await (supabase.from('pack_offers') as any)
+                .select('id, price')
+                .eq('gateway', gateway)
+                .eq('external_id', offer.external_id)
+                .maybeSingle();
+
+            if (existingOffer) {
+                // Update
+                const updatePayload: any = {
+                    is_active: true,
+                    updated_at: new Date().toISOString()
+                };
+
+                if (offer.price > 0 || gateway === 'stripe') {
+                    updatePayload.price = offer.price;
+                }
+                if (offer.offer_name) {
+                    updatePayload.name = offer.offer_name;
+                }
+
+                const { error: updateError } = await (supabase.from('pack_offers') as any)
+                    .update(updatePayload)
+                    .eq('id', existingOffer.id);
+
+                if (updateError) {
+                    console.error(`Error updating offer ${existingOffer.id}:`, updateError);
+                } else if (updatePayload.price !== undefined && existingOffer.price !== updatePayload.price) {
+                    updatedCount++;
+                }
             } else {
-                newCount++;
+                // Insert
+                const { error: insertOfferError } = await (supabase.from('pack_offers') as any)
+                    .insert({
+                        pack_id: currentPackId,
+                        gateway: gateway,
+                        name: offer.offer_name || `${offer.name} (${gateway.charAt(0).toUpperCase() + gateway.slice(1)})`,
+                        price: offer.price || 0,
+                        currency: offer.currency,
+                        external_id: offer.external_id,
+                        checkout_url: offer.checkout_url || '',
+                        is_active: true
+                    });
+
+                if (insertOfferError) {
+                    console.error(`Error creating new offer for ${offer.external_id}:`, insertOfferError);
+                } else {
+                    newCount++;
+                }
             }
         }
     }
 
-    // --- PURGE MISSING OFFERS ---
-    // Deactivate offers whose external_id is no longer in the current platform list.
-    // For Hotmart: ONLY deactivate offers whose external_id is a pure numeric product ID
-    // (those created by this sync). Alphanumeric offer codes (manually added) are never touched.
+    // ----------------------------------------------------
+    // PHASE 4: PURGE MISSING OFFERS
+    // ----------------------------------------------------
     let deactivatedCount = 0;
 
-    const { data: allGatewayOffers } = await (supabase
-        .from('pack_offers') as any)
+    const { data: allGatewayOffers } = await (supabase.from('pack_offers') as any)
         .select('id, external_id, pack_id')
         .eq('gateway', gateway)
         .eq('is_active', true);
@@ -183,10 +190,9 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
         for (const offer of allGatewayOffers) {
             if (!offer.external_id) continue;
 
-            // If this offer's external_id was not in the current platform list → deactivate it
+            // If not found in current payload -> deactivate
             if (!processedIds.has(offer.external_id)) {
-                const { error: deactivateError } = await (supabase
-                    .from('pack_offers') as any)
+                const { error: deactivateError } = await (supabase.from('pack_offers') as any)
                     .update({ is_active: false })
                     .eq('id', offer.id);
 
@@ -195,16 +201,14 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
 
                     // Check if parent Pack has ANY active offers left across ALL gateways
                     if (offer.pack_id) {
-                        const { count, error: countError } = await (supabase
-                            .from('pack_offers') as any)
+                        const { count, error: countError } = await (supabase.from('pack_offers') as any)
                             .select('id', { count: 'exact', head: true })
                             .eq('pack_id', offer.pack_id)
                             .eq('is_active', true);
 
                         if (!countError && count === 0) {
-                            // No active offers left anywhere → deactivate the parent Pack
-                            await (supabase
-                                .from('packs') as any)
+                            // No active offers left anywhere -> deactivate the parent Pack
+                            await (supabase.from('packs') as any)
                                 .update({ is_active: false })
                                 .eq('id', offer.pack_id);
                         }
