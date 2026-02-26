@@ -148,10 +148,15 @@ async function handleCheckoutCompleted(session: any) {
     if (existingSale) {
         console.log(`Found existing pending sale ${existingSale.id}. Updating it.`);
 
+        const newAmountCollected = Number(existingSale.amount_collected || 0) + Number(totalAmount);
+        const newTransactionId = existingSale.transaction_id
+            ? `${existingSale.transaction_id},${session.id}`
+            : session.id;
+
         const updatePayload = {
-            amount_collected: totalAmount, // Stripe is full payment
+            amount_collected: newAmountCollected,
             gateway: 'stripe',
-            transaction_id: session.id,
+            transaction_id: newTransactionId,
             status: 'paid',
             metadata: {
                 ...existingSale.metadata,

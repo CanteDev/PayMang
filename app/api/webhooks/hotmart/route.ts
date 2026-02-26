@@ -186,10 +186,15 @@ async function handlePurchaseComplete(data: any) {
         // DO NOT overwrite the total_amount (which is the agreed debt).
         // Only update the amount_collected and gateway info.
 
+        const newAmountCollected = Number(existingSale.amount_collected || 0) + Number(totalAmount);
+        const newTransactionId = existingSale.transaction_id
+            ? `${existingSale.transaction_id},${transactionId}`
+            : transactionId;
+
         const updatePayload = {
-            amount_collected: totalAmount, // What was paid TODAY
+            amount_collected: newAmountCollected,
             gateway: 'hotmart',
-            transaction_id: transactionId,
+            transaction_id: newTransactionId,
             status: 'paid', // Mark as paid/active
             metadata: {
                 ...existingSale.metadata,

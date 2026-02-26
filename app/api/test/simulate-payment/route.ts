@@ -92,10 +92,15 @@ export async function POST(request: NextRequest) {
         if (existingSale) {
             console.log(`[SIM] Found pending sale ${existingSale.id}. Updating.`);
 
+            const newAmountCollected = Number(existingSale.amount_collected || 0) + Number(totalAmount);
+            const newTransactionId = existingSale.transaction_id
+                ? `${existingSale.transaction_id},SIMULATED_${Date.now()}_${linkId}`
+                : `SIMULATED_${Date.now()}_${linkId}`;
+
             const updatePayload = {
-                amount_collected: totalAmount,
+                amount_collected: newAmountCollected,
                 gateway: link.gateway,
-                transaction_id: `SIMULATED_${Date.now()}_${linkId}`,
+                transaction_id: newTransactionId,
                 status: 'paid',
                 metadata: {
                     ...existingSale.metadata,
