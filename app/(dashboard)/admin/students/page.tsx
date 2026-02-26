@@ -79,7 +79,7 @@ export default function AdminStudentsPage() {
                     *,
                     coach:profiles!assigned_coach_id(full_name),
                     payments(amount, status, due_date),
-                    sales(total_amount, status, gateway)
+                    sales(total_amount, status, gateway, amount_collected)
                 `)
                 .order('created_at', { ascending: false });
 
