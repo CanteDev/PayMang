@@ -7,10 +7,10 @@ export async function updateStudentAction(studentId: string, payload: any) {
     const supabase = await createClient();
 
     try {
-        // 1. Get the current student and sale state before modifying
+        // 1. Get the current student
         const { data: oldStudent, error: oldStudentError } = await (supabase as any)
             .from('students')
-            .select('*, sales(*)')
+            .select('*')
             .eq('id', studentId)
             .single();
 
@@ -18,12 +18,20 @@ export async function updateStudentAction(studentId: string, payload: any) {
             return { success: false, error: 'Estudiante no encontrado' };
         }
 
-        const oldSale = oldStudent.sales && oldStudent.sales.length > 0 ? oldStudent.sales[0] : null;
+        // 2. Update the student record (only profile fields allowed now)
+        const profilePayload = {
+            email: payload.email,
+            full_name: payload.full_name,
+            phone: payload.phone,
+            assigned_coach_id: payload.assigned_coach_id,
+            closer_id: payload.closer_id,
+            setter_id: payload.setter_id,
+            status: payload.status
+        };
 
-        // 2. Update the student record
         const { data: updatedStudent, error: updateError } = await (supabase as any)
             .from('students')
-            .update(payload)
+            .update(profilePayload)
             .eq('id', studentId)
             .select()
             .single();
@@ -33,84 +41,93 @@ export async function updateStudentAction(studentId: string, payload: any) {
             return { success: false, error: 'Failed to update student record' };
         }
 
-        // 3. If price or pack changed, we MUST recalculate finances
-        const priceChanged = oldStudent.agreed_price !== payload.agreed_price;
-        const packChanged = oldStudent.pack_id !== payload.pack_id;
-        const installmentsChanged = oldStudent.total_installments !== payload.total_installments;
+        revalidatePath('/admin/students');
+        revalidatePath('/admin/payments');
 
-        if (oldSale && (priceChanged || packChanged || installmentsChanged)) {
-            // --- 3A. Update Sale ---
-            const { error: saleError } = await (supabase as any)
+        return { success: true, data: updatedStudent };
+    } catch (e: any) {
+        console.error('updateStudentAction error:', e);
+        return { success: false, error: e.message || 'An unexpected error occurred' };
+    }
+}
+
+export async function createStudentAction(payload: any, salePayload?: any) {
+    const supabase = await createClient();
+
+    try {
+        // 1. Create the student record
+        const profilePayload = {
+            email: payload.email,
+            full_name: payload.full_name,
+            phone: payload.phone,
+            assigned_coach_id: payload.assigned_coach_id,
+            closer_id: payload.closer_id,
+            setter_id: payload.setter_id,
+            status: payload.status
+        };
+
+        const { data: newStudent, error: insertError } = await (supabase as any)
+            .from('students')
+            .insert(profilePayload)
+            .select()
+            .single();
+
+        if (insertError) {
+            console.error('Failed to create student:', insertError);
+            return { success: false, error: 'Failed to create student record' };
+        }
+
+        // 2. If a pack is selected, create the initial sale and payments
+        if (salePayload && salePayload.pack_id) {
+            const saleData = {
+                student_id: newStudent.id,
+                pack_id: salePayload.pack_id,
+                gateway: 'manual', // or whichever default
+                transaction_id: `manual_${Date.now()}`,
+                total_amount: salePayload.agreed_price,
+                amount_collected: 0,
+                status: 'pending',
+                payment_method: salePayload.payment_method,
+                total_installments: salePayload.total_installments,
+                installment_period: salePayload.installment_period,
+                start_date: salePayload.start_date
+            };
+
+            const { data: newSale, error: saleError } = await (supabase as any)
                 .from('sales')
-                .update({
-                    pack_id: payload.pack_id,
-                    total_amount: payload.agreed_price
-                })
-                .eq('id', oldSale.id);
+                .insert(saleData)
+                .select()
+                .single();
 
             if (saleError) {
-                console.error('Failed to update sale:', saleError);
-                return { success: false, error: 'Failed to update sale' };
+                console.error('Failed to create initial sale:', saleError);
+                // Return success for student but with warning
+                return { success: true, data: newStudent, warning: 'Student created but failed to create sale' };
             }
 
-            // --- 3B. Identify Paid Amounts ---
-            const { data: payments } = await (supabase as any)
-                .from('payments')
-                .select('*')
-                .eq('student_id', studentId)
-                .order('due_date', { ascending: true });
-
-            const pastPayments: any[] = payments || [];
-            // Consider a payment complete if it's 'paid'
-            const collectedPayments = pastPayments.filter((p: any) => p.status === 'paid');
-            const collectedAmount = collectedPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
-
-            // --- 3C. Calculate Remaining Debt ---
-            const newTotal = Number(payload.agreed_price);
-            const remainingDebt = Math.max(0, newTotal - collectedAmount);
-
-            // --- 3D. Purge Old Pending Payments ---
-            const { error: purgeError } = await (supabase as any)
-                .from('payments')
-                .delete()
-                .eq('student_id', studentId)
-                .eq('status', 'pending');
-
-            if (purgeError) {
-                console.error('Failed to purge old pending payments:', purgeError);
-                return { success: false, error: 'Failed to clear old pending installments' };
-            }
-
-            // --- 3E. Generate New Pending Installments (if applicable) ---
-            if (payload.payment_method === 'installments' && payload.total_installments > 1 && remainingDebt > 0) {
-                // How many installments do we have left to generate?
-                // E.g. User wants 3 installments total. 1 is already paid. We need to generate 2.
-                const paidCount = collectedPayments.length;
-                const remainingInstallmentCount = Math.max(1, payload.total_installments - paidCount);
-
-                // Re-divide the remaining debt over the remaining months
-                const newInstallmentAmount = Number((remainingDebt / remainingInstallmentCount).toFixed(2));
-
-                // To handle minor decimal drifting, adjust the last one
-                const rawTotalGenerated = newInstallmentAmount * remainingInstallmentCount;
-                const driftAdjustment = Number((remainingDebt - rawTotalGenerated).toFixed(2));
+            // 3. Generate initial pending installments
+            const debt = salePayload.agreed_price;
+            if (debt > 0) {
+                const totalInstallments = salePayload.payment_method === 'installments' ? salePayload.total_installments : 1;
+                const installmentAmount = Number((debt / totalInstallments).toFixed(2));
+                const driftAdjustment = Number((debt - (installmentAmount * totalInstallments)).toFixed(2));
 
                 const newPayments = [];
-                const baseDate = new Date();
+                const baseDate = new Date(salePayload.start_date || new Date().toISOString());
 
-                for (let i = 0; i < remainingInstallmentCount; i++) {
+                for (let i = 0; i < totalInstallments; i++) {
                     const dueDate = new Date(baseDate);
-                    // Move one month forward for each new pending installment
-                    dueDate.setMonth(dueDate.getMonth() + (i + 1) * payload.installment_period);
+                    // First payment is due on start_date (0 offset), subsequent payments based on period
+                    dueDate.setMonth(dueDate.getMonth() + (i * salePayload.installment_period));
 
-                    let amount = newInstallmentAmount;
-                    // Add the drift to the very last installment
-                    if (i === remainingInstallmentCount - 1) {
+                    let amount = installmentAmount;
+                    if (i === totalInstallments - 1) {
                         amount = Number((amount + driftAdjustment).toFixed(2));
                     }
 
                     newPayments.push({
-                        student_id: studentId,
+                        student_id: newStudent.id,
+                        sale_id: newSale.id, // Explicitly linking to sale
                         amount: amount,
                         due_date: dueDate.toISOString().split('T')[0],
                         status: 'pending',
@@ -119,41 +136,21 @@ export async function updateStudentAction(studentId: string, payload: any) {
                 }
 
                 if (newPayments.length > 0) {
-                    const { error: insertPaymentsError } = await (supabase as any)
+                    const { error: paymentsError } = await (supabase as any)
                         .from('payments')
                         .insert(newPayments);
 
-                    if (insertPaymentsError) {
-                        console.error('Failed to insert new installments:', insertPaymentsError);
-                        return { success: false, error: 'Failed to create new installments' };
+                    if (paymentsError) {
+                        console.error('Failed to create initial installments:', paymentsError);
                     }
                 }
-            } else if (remainingDebt > 0) {
-                // It's upfront payment and they still owe money? Create 1 pending payment for the remainder.
-                // (e.g., they upgraded from a 1000 pack to 2000 upfront)
-                const { error: insertRemainderError } = await (supabase as any)
-                    .from('payments')
-                    .insert({
-                        student_id: studentId,
-                        amount: remainingDebt,
-                        due_date: new Date().toISOString().split('T')[0],
-                        status: 'pending',
-                        method: 'manual'
-                    });
-                if (insertRemainderError) {
-                    console.error('Failed to insert remainder payment:', insertRemainderError);
-                    return { success: false, error: 'Failed to create remainder payment' };
-                }
             }
-
         }
 
         revalidatePath('/admin/students');
-        revalidatePath('/admin/payments');
-
-        return { success: true, data: updatedStudent };
+        return { success: true, data: newStudent };
     } catch (e: any) {
-        console.error('updateStudentAction error:', e);
+        console.error('createStudentAction error:', e);
         return { success: false, error: e.message || 'An unexpected error occurred' };
     }
 }

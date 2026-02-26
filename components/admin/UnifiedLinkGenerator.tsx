@@ -17,7 +17,6 @@ interface Student {
     full_name: string;
     assigned_coach_id: string | null;
     closer_id: string | null;
-    pack_id: string | null;
 }
 
 interface Pack {
@@ -134,13 +133,6 @@ export default function UnifiedLinkGenerator() {
         if (selectedStudent && selectedStudent !== prevSelectedStudentRef.current) {
             const student = students.find(s => s.id === selectedStudent);
             if (student) {
-                // Autocompletar pack si está asignado
-                if (student.pack_id) {
-                    setSelectedPack(student.pack_id);
-                } else {
-                    setSelectedPack('');
-                }
-
                 // Autocompletar coach si está asignado, de lo contrario buscar el más libre
                 if (student.assigned_coach_id) {
                     setAssignedCoach(student.assigned_coach_id);

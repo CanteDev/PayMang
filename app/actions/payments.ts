@@ -17,6 +17,7 @@ function getSupabaseAdmin() {
 
 interface RegisterPaymentData {
     studentId: string;
+    saleId: string; // The specific pack/sale this payment applies to
     amount: number;
     date: string;
     method: string;
@@ -59,13 +60,14 @@ export async function registerPayment(data: RegisterPaymentData) {
         if (error) return { error: error.message };
 
         // Generate commissions for this payment
-        await generateManualCommissions(adminSupabase, data.studentId, data.amount, data.paymentId, false);
+        await generateManualCommissions(adminSupabase, data.studentId, data.saleId, data.amount, data.paymentId, false);
     } else {
         // Create new manual payment
         const { data: newPayment, error } = await adminSupabase
             .from('payments')
             .insert({
                 student_id: data.studentId,
+                sale_id: data.saleId, // Link payment to the sale
                 amount: data.amount,
                 status: 'paid',
                 due_date: data.date,
@@ -78,7 +80,7 @@ export async function registerPayment(data: RegisterPaymentData) {
 
         if (error) return { error: error.message };
         if (newPayment) {
-            await generateManualCommissions(adminSupabase, data.studentId, data.amount, newPayment.id, true);
+            await generateManualCommissions(adminSupabase, data.studentId, data.saleId, data.amount, newPayment.id, true);
         }
     }
 
@@ -88,11 +90,11 @@ export async function registerPayment(data: RegisterPaymentData) {
     return { success: true };
 }
 
-async function generateManualCommissions(supabase: any, studentId: string, amount: number, paymentId: string, isNew: boolean) {
-    // 1. Get student info to find agents and pack
+async function generateManualCommissions(supabase: any, studentId: string, saleId: string, amount: number, paymentId: string, isNew: boolean) {
+    // 1. Get student info to find agents 
     const { data: student } = await supabase
         .from('students')
-        .select('assigned_coach_id, closer_id, setter_id, pack_id')
+        .select('assigned_coach_id, closer_id, setter_id')
         .eq('id', studentId)
         .single();
 
@@ -109,7 +111,7 @@ async function generateManualCommissions(supabase: any, studentId: string, amoun
         if (commAmount > 0) {
             commissions.push({
                 payment_id: paymentId,
-                sale_id: null,
+                sale_id: saleId, // Link commission to the sale
                 agent_id: student.assigned_coach_id,
                 role_at_sale: 'coach',
                 amount: commAmount,
@@ -124,7 +126,7 @@ async function generateManualCommissions(supabase: any, studentId: string, amoun
         if (commAmount > 0) {
             commissions.push({
                 payment_id: paymentId,
-                sale_id: null,
+                sale_id: saleId, // Link commission to the sale
                 agent_id: student.closer_id,
                 role_at_sale: 'closer',
                 amount: commAmount,
@@ -139,7 +141,7 @@ async function generateManualCommissions(supabase: any, studentId: string, amoun
         if (commAmount > 0) {
             commissions.push({
                 payment_id: paymentId,
-                sale_id: null,
+                sale_id: saleId, // Link commission to the sale
                 agent_id: student.setter_id,
                 role_at_sale: 'setter',
                 amount: commAmount,

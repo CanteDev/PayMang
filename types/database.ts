@@ -83,6 +83,7 @@ export interface Student {
 export interface Payment {
     id: string;
     student_id: string;
+    sale_id: string; // Linking payments to specific sales (packs)
     amount: number;
     status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'overdue';
     due_date: string;
@@ -101,6 +102,10 @@ export interface Sale {
     transaction_id: string;
     total_amount: number;
     amount_collected: number;
+    payment_method: string | null;
+    total_installments: number;
+    installment_period: number;
+    start_date: string;
     status: SaleStatus;
     metadata: {
         closer_id?: string;

@@ -24,14 +24,13 @@ interface Student {
     };
     created_at: string;
     // Payment info
-    agreed_price: number;
     payments?: {
         amount: number;
         status: string;
         due_date: string;
     }[];
     sales?: {
-        amount_collected: number;
+        total_amount: number;
         status: string;
         gateway: string;
     }[];
@@ -79,7 +78,7 @@ export default function AdminStudentsPage() {
                     *,
                     coach:profiles!assigned_coach_id(full_name),
                     payments(amount, status, due_date),
-                    sales(amount_collected, status, gateway)
+                    sales(total_amount, status, gateway)
                 `)
                 .order('created_at', { ascending: false });
 
@@ -129,13 +128,16 @@ export default function AdminStudentsPage() {
         yesterday.setDate(yesterday.getDate() - 1);
         yesterday.setHours(0, 0, 0, 0);
 
+        // Get total agreed across all sales
+        const totalAgreed = student.sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
+
         // Get total collected via gateway sales
-        const gatewaySales = student.sales
+        const gatewaySalesTotal = student.sales
             ?.filter(s => s.status === 'paid')
-            .reduce((sum, s) => sum + (s.amount_collected || 0), 0) || 0;
+            .reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
 
         // A student is not overdue if gateway sales already cover full price
-        const fullyPaidViaGateway = gatewaySales >= (student.agreed_price || 0);
+        const fullyPaidViaGateway = totalAgreed > 0 && gatewaySalesTotal >= totalAgreed;
 
         const isOverdue = !fullyPaidViaGateway && student.payments?.some(p =>
             p.status === 'pending' && new Date(p.due_date) < yesterday
@@ -146,13 +148,13 @@ export default function AdminStudentsPage() {
     });
 
     const getPaymentProgress = (student: Student) => {
-        const totalAgreed = student.agreed_price || 0;
+        const totalAgreed = student.sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
         if (totalAgreed === 0) return { paid: 0, total: 0, percentage: 0 };
 
         // Sum gateway sales (Stripe, Hotmart, Sequra, etc.)
         const gatewaySales = student.sales
             ?.filter(s => s.status === 'paid')
-            .reduce((sum, s) => sum + (s.amount_collected || 0), 0) || 0;
+            .reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
 
         // Sum manual payments (only those NOT from a gateway, to avoid double counting)
         const manualPaid = student.payments
@@ -341,8 +343,9 @@ export default function AdminStudentsPage() {
                                             const yesterday = new Date();
                                             yesterday.setDate(yesterday.getDate() - 1);
                                             yesterday.setHours(0, 0, 0, 0);
-                                            const gatewaySalesTotal = student.sales?.filter(s => s.status === 'paid').reduce((sum, s) => sum + (s.amount_collected || 0), 0) || 0;
-                                            const fullyPaidViaGateway = gatewaySalesTotal >= (student.agreed_price || 0);
+                                            const totalAgreed = student.sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
+                                            const gatewaySalesTotal = student.sales?.filter(s => s.status === 'paid').reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
+                                            const fullyPaidViaGateway = totalAgreed > 0 && gatewaySalesTotal >= totalAgreed;
                                             const isOverdue = !fullyPaidViaGateway && student.payments?.some(p =>
                                                 p.status === 'pending' && new Date(p.due_date) < yesterday
                                             );

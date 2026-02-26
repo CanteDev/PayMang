@@ -14,7 +14,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { UserPlus, Edit2 } from 'lucide-react';
-import { updateStudentAction } from '@/app/actions/students';
+import { updateStudentAction, createStudentAction } from '@/app/actions/students';
 
 interface StudentFormProps {
     student?: {
@@ -189,22 +189,28 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
             let resultStudent = null;
 
             if (student?.id) {
-                // Actualizar estudiante existente usando la Server Action
+                // Actualizar estudiante existente usando la Server Action refactorizada (solo perfil)
                 const response = await updateStudentAction(student.id, studentData);
                 if (!response.success) {
                     throw new Error(response.error);
                 }
                 resultStudent = response.data;
             } else {
-                // Crear nuevo estudiante (mantenemos la logica original)
-                const { data, error: insertError } = await (supabase
-                    .from('students') as any)
-                    .insert(studentData as any)
-                    .select()
-                    .single();
+                // Crear nuevo estudiante y Venta inicial usando la nueva acción
+                const salePayload = packId ? {
+                    pack_id: packId,
+                    payment_method: paymentMethod,
+                    total_installments: paymentMethod === 'installments' ? Number(totalInstallments) : 1,
+                    installment_period: paymentMethod === 'installments' ? Number(installmentPeriod) : 1,
+                    start_date: startDate,
+                    agreed_price: Number(agreedPrice)
+                } : undefined;
 
-                if (insertError) throw insertError;
-                resultStudent = data;
+                const response = await createStudentAction(studentData, salePayload);
+                if (!response.success) {
+                    throw new Error(response.error);
+                }
+                resultStudent = response.data;
             }
 
             setOpen(false);
@@ -354,95 +360,97 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                         </select>
                     </div>
 
-                    {/* Pack & Payment Config */}
-                    <div className="pt-4 border-t border-gray-100">
-                        <h4 className="text-sm font-semibold mb-3">Configuración de Pago</h4>
+                    {/* Pack & Payment Config - ONLY VISIBLE DURING CREATION */}
+                    {!student && (
+                        <div className="pt-4 border-t border-gray-100">
+                            <h4 className="text-sm font-semibold mb-3">Configuración de Venta Inicial (Opcional)</h4>
 
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="pack">Pack Seleccionado</Label>
-                                <select
-                                    id="pack"
-                                    value={packId}
-                                    onChange={(e) => setPackId(e.target.value)}
-                                    className="w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
-                                    disabled={loading}
-                                >
-                                    <option value="">-- Seleccionar Pack --</option>
-                                    {packs.map(pack => (
-                                        <option key={pack.id} value={pack.id}>
-                                            {pack.name} ({pack.price}€)
-                                        </option>
-                                    ))}
-                                </select>
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="pack">Pack Seleccionado</Label>
+                                    <select
+                                        id="pack"
+                                        value={packId}
+                                        onChange={(e) => setPackId(e.target.value)}
+                                        className="w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
+                                        disabled={loading}
+                                    >
+                                        <option value="">-- Seleccionar Pack --</option>
+                                        {packs.map(pack => (
+                                            <option key={pack.id} value={pack.id}>
+                                                {pack.name} ({pack.price}€)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {packId && (
+                                    <>
+                                        <div className="space-y-2">
+                                            <Label>Modalidad de Pago</Label>
+                                            <div className="flex gap-4">
+                                                <div className="flex items-center space-x-2">
+                                                    <input
+                                                        type="radio"
+                                                        id="upfront"
+                                                        name="paymentMethod"
+                                                        value="upfront"
+                                                        checked={paymentMethod === 'upfront'}
+                                                        onChange={() => setPaymentMethod('upfront')}
+                                                        className="w-4 h-4 text-primary-600"
+                                                    />
+                                                    <Label htmlFor="upfront" className="font-normal">Pago Único</Label>
+                                                </div>
+                                                <div className="flex items-center space-x-2">
+                                                    <input
+                                                        type="radio"
+                                                        id="installments"
+                                                        name="paymentMethod"
+                                                        value="installments"
+                                                        checked={paymentMethod === 'installments'}
+                                                        onChange={() => setPaymentMethod('installments')}
+                                                        className="w-4 h-4 text-primary-600"
+                                                    />
+                                                    <Label htmlFor="installments" className="font-normal">Cuotas</Label>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {paymentMethod === 'installments' && (
+                                            <div className="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded-lg">
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="numInstallments">Nº Cuotas</Label>
+                                                    <Input
+                                                        id="numInstallments"
+                                                        type="number"
+                                                        min="1"
+                                                        value={totalInstallments}
+                                                        onChange={(e) => setTotalInstallments(Number(e.target.value))}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="period">Periodicidad (meses)</Label>
+                                                    <Input
+                                                        id="period"
+                                                        type="number"
+                                                        min="1"
+                                                        value={installmentPeriod}
+                                                        onChange={(e) => setInstallmentPeriod(Number(e.target.value))}
+                                                        placeholder="1 = Mensual"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2 col-span-2">
+                                                    <p className="text-sm text-gray-500">
+                                                        Las cuotas se generarán a partir de la fecha de inscripción.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
-
-                            {packId && (
-                                <>
-                                    <div className="space-y-2">
-                                        <Label>Modalidad de Pago</Label>
-                                        <div className="flex gap-4">
-                                            <div className="flex items-center space-x-2">
-                                                <input
-                                                    type="radio"
-                                                    id="upfront"
-                                                    name="paymentMethod"
-                                                    value="upfront"
-                                                    checked={paymentMethod === 'upfront'}
-                                                    onChange={() => setPaymentMethod('upfront')}
-                                                    className="w-4 h-4 text-primary-600"
-                                                />
-                                                <Label htmlFor="upfront" className="font-normal">Pago Único</Label>
-                                            </div>
-                                            <div className="flex items-center space-x-2">
-                                                <input
-                                                    type="radio"
-                                                    id="installments"
-                                                    name="paymentMethod"
-                                                    value="installments"
-                                                    checked={paymentMethod === 'installments'}
-                                                    onChange={() => setPaymentMethod('installments')}
-                                                    className="w-4 h-4 text-primary-600"
-                                                />
-                                                <Label htmlFor="installments" className="font-normal">Cuotas</Label>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {paymentMethod === 'installments' && (
-                                        <div className="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded-lg">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="numInstallments">Nº Cuotas</Label>
-                                                <Input
-                                                    id="numInstallments"
-                                                    type="number"
-                                                    min="1"
-                                                    value={totalInstallments}
-                                                    onChange={(e) => setTotalInstallments(Number(e.target.value))}
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="period">Periodicidad (meses)</Label>
-                                                <Input
-                                                    id="period"
-                                                    type="number"
-                                                    min="1"
-                                                    value={installmentPeriod}
-                                                    onChange={(e) => setInstallmentPeriod(Number(e.target.value))}
-                                                    placeholder="1 = Mensual"
-                                                />
-                                            </div>
-                                            <div className="space-y-2 col-span-2">
-                                                <p className="text-sm text-gray-500">
-                                                    Las cuotas se generarán a partir de la fecha de inscripción.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </>
-                            )}
                         </div>
-                    </div>
+                    )}
 
                     <div className="space-y-2">
                         <Label htmlFor="setter">Setter Asignado</Label>
