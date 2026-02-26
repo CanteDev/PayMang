@@ -123,45 +123,45 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
     }
 
     // --- PURGE MISSING OFFERS ---
-    // Skip purge for Hotmart: the API only returns Product IDs, not Offer codes,
-    // so we'd incorrectly deactivate all manually-configured offers.
+    // Deactivate offers whose external_id is no longer in the current platform list.
+    // For Hotmart: ONLY deactivate offers whose external_id is a pure numeric product ID
+    // (those created by this sync). Alphanumeric offer codes (manually added) are never touched.
     let deactivatedCount = 0;
 
-    if (gateway !== 'hotmart') {
-        const { data: allGatewayOffers } = await (supabase
-            .from('pack_offers') as any)
-            .select('id, external_id, pack_id')
-            .eq('gateway', gateway)
-            .eq('is_active', true);
+    const { data: allGatewayOffers } = await (supabase
+        .from('pack_offers') as any)
+        .select('id, external_id, pack_id')
+        .eq('gateway', gateway)
+        .eq('is_active', true);
 
-        if (allGatewayOffers) {
-            for (const offer of allGatewayOffers) {
-                // If the DB offer is active, but its external_id wasn't in the list downloaded today...
-                if (offer.external_id && !processedIds.has(offer.external_id)) {
-                    // Deactivate it
-                    const { error: deactivateError } = await (supabase
-                        .from('pack_offers') as any)
-                        .update({ is_active: false })
-                        .eq('id', offer.id);
+    if (allGatewayOffers) {
+        for (const offer of allGatewayOffers) {
+            if (!offer.external_id) continue;
 
-                    if (!deactivateError) {
-                        deactivatedCount++;
+            // If this offer's external_id was not in the current platform list → deactivate it
+            if (!processedIds.has(offer.external_id)) {
+                const { error: deactivateError } = await (supabase
+                    .from('pack_offers') as any)
+                    .update({ is_active: false })
+                    .eq('id', offer.id);
 
-                        // Check if parent Pack has ANY active offers left across ALL gateways
-                        if (offer.pack_id) {
-                            const { count, error: countError } = await (supabase
-                                .from('pack_offers') as any)
-                                .select('id', { count: 'exact', head: true })
-                                .eq('pack_id', offer.pack_id)
-                                .eq('is_active', true);
+                if (!deactivateError) {
+                    deactivatedCount++;
 
-                            if (!countError && count === 0) {
-                                // No active offers left anywhere, deactivate the parent Pack
-                                await (supabase
-                                    .from('packs') as any)
-                                    .update({ is_active: false })
-                                    .eq('id', offer.pack_id);
-                            }
+                    // Check if parent Pack has ANY active offers left across ALL gateways
+                    if (offer.pack_id) {
+                        const { count, error: countError } = await (supabase
+                            .from('pack_offers') as any)
+                            .select('id', { count: 'exact', head: true })
+                            .eq('pack_id', offer.pack_id)
+                            .eq('is_active', true);
+
+                        if (!countError && count === 0) {
+                            // No active offers left anywhere → deactivate the parent Pack
+                            await (supabase
+                                .from('packs') as any)
+                                .update({ is_active: false })
+                                .eq('id', offer.pack_id);
                         }
                     }
                 }
@@ -221,22 +221,71 @@ export async function processStripeSync() {
 export async function processHotmartSync() {
     console.log("Starting Hotmart Sync...");
     try {
-        const response: any = await hotmart.request('https://developers.hotmart.com/products/api/v1/products', {
+        const response: any = await hotmart.request('https://developers.hotmart.com/products/api/v1/products?max_results=50', {
             method: 'GET'
         });
 
         const items = response?.items || response?.data || [];
-        // Filter ONLY active products so paused/drafts are properly pruned later
+        // Filter ONLY active products
         const activeItems = items.filter((prod: any) => prod.status === 'ACTIVE');
 
-        const standardizedProducts: StandardizedProduct[] = activeItems.map((prod: any) => ({
-            external_id: String(prod.id),
-            name: prod.name || `Hotmart Product ${prod.id}`,
-            description: prod.description || '',
-            // Hotmart API never returns offer prices. Admin sets these manually on each pack_offer.
-            price: 0,
-            currency: 'EUR'
-        }));
+        const standardizedProducts: StandardizedProduct[] = [];
+
+        for (const prod of activeItems) {
+            const productName = prod.name || `Hotmart Product ${prod.id}`;
+            const packDesc = prod.description || '';
+
+            if (prod.ucode) {
+                try {
+                    // Fetch real offers for this product using its ucode (this is how we get prices and offer codes)
+                    const offersResponse: any = await hotmart.request(`https://developers.hotmart.com/products/api/v1/products/${prod.ucode}/offers?max_results=50`);
+                    const offers = offersResponse?.items || [];
+
+                    if (offers.length > 0) {
+                        for (const offer of offers) {
+                            standardizedProducts.push({
+                                external_id: offer.code,
+                                name: productName,
+                                description: packDesc,
+                                price: offer.price?.value || 0,
+                                currency: offer.price?.currency_code || 'EUR',
+                                checkout_url: `https://pay.hotmart.com/${prod.ucode}?checkoutMode=10&off=${offer.code}`
+                            });
+                        }
+                    } else {
+                        // Fallback: Product has no offers returned, create a placeholder with ID so pack is generated
+                        standardizedProducts.push({
+                            external_id: String(prod.id),
+                            name: productName,
+                            description: packDesc,
+                            price: 0,
+                            currency: 'EUR',
+                            checkout_url: `https://pay.hotmart.com/${prod.ucode}?checkoutMode=10`
+                        });
+                    }
+                } catch (offerErr: any) {
+                    console.error(`Failed to fetch offers for Hotmart product ${prod.id} (${prod.ucode}):`, offerErr.message);
+                    // Fallback to numeric product ID if offers fail completely (to at least sync the pack)
+                    standardizedProducts.push({
+                        external_id: String(prod.id),
+                        name: productName,
+                        description: packDesc,
+                        price: 0,
+                        currency: 'EUR',
+                        checkout_url: `https://pay.hotmart.com/${prod.ucode}?checkoutMode=10`
+                    });
+                }
+            } else {
+                // If by some reason it has no ucode
+                standardizedProducts.push({
+                    external_id: String(prod.id),
+                    name: productName,
+                    description: packDesc,
+                    price: 0,
+                    currency: 'EUR'
+                });
+            }
+        }
 
         return await syncGatewayProducts('hotmart', standardizedProducts);
     } catch (e: any) {
