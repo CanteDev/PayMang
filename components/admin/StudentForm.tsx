@@ -14,6 +14,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { UserPlus, Edit2 } from 'lucide-react';
+import { updateStudentAction } from '@/app/actions/students';
 
 interface StudentFormProps {
     student?: {
@@ -188,18 +189,10 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
             let resultStudent = null;
 
             if (student?.id) {
-                // Actualizar estudiante existente
-                const { data, error: updateError } = await (supabase
-                    .from('students') as any)
-                    .update(studentData as any)
-                    .eq('id', student.id)
-                    .select()
-                    .single();
-
-                if (updateError) throw updateError;
-                resultStudent = data;
+                // Actualizar estudiante existente usando la Server Action
+                resultStudent = await updateStudentAction(student.id, studentData);
             } else {
-                // Crear nuevo estudiante
+                // Crear nuevo estudiante (mantenemos la logica original)
                 const { data, error: insertError } = await (supabase
                     .from('students') as any)
                     .insert(studentData as any)
