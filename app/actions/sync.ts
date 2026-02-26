@@ -7,7 +7,8 @@ import { hotmart } from '@/lib/hotmart';
 
 export interface StandardizedProduct {
     external_id: string; // The specific API ID
-    name: string;
+    name: string;        // The base Pack name
+    offer_name?: string; // The specific name for this offer (e.g. 'Precio Base', '1st Upgrade')
     description?: string;
     price: number;
     currency: string;
@@ -49,6 +50,10 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
 
             if (p.price > 0 || gateway === 'stripe') {
                 updatePayload.price = p.price;
+            }
+
+            if (p.offer_name) {
+                updatePayload.name = p.offer_name;
             }
 
             const { error: updateError } = await (supabase
@@ -146,7 +151,7 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
                 .insert({
                     pack_id: packId,
                     gateway: gateway,
-                    name: `${p.name} (${gateway.charAt(0).toUpperCase() + gateway.slice(1)})`,
+                    name: p.offer_name || `${p.name} (${gateway.charAt(0).toUpperCase() + gateway.slice(1)})`,
                     price: p.price || 0,
                     currency: p.currency,
                     external_id: p.external_id,
@@ -239,7 +244,8 @@ export async function processStripeSync() {
 
                 standardizedProducts.push({
                     external_id: prod.id,
-                    name: prodPrices.length > 1 ? `${prod.name}${nameSuffix}` : prod.name,
+                    name: prod.name,
+                    offer_name: prodPrices.length > 1 ? `${prod.name}${nameSuffix} (Stripe)` : `${prod.name} (Stripe)`,
                     description: prod.description || undefined,
                     price: parseFloat(price.unit_amount_decimal || '0') / 100,
                     currency: price.currency.toUpperCase()
@@ -283,9 +289,18 @@ export async function processHotmartSync() {
 
                     if (offers.length > 0) {
                         for (const offer of offers) {
+                            let specificOfferName = offer.name;
+                            if (!specificOfferName) {
+                                specificOfferName = offer.is_main_offer ? 'Precio Base' : 'Oferta Hotmart';
+                            } else {
+                                // Sometimes names just come as "1st Upgrade", append Hotmart for clarity if desired.
+                                // Actually, let's keep it clean as requested.
+                            }
+
                             standardizedProducts.push({
                                 external_id: offer.code,
                                 name: productName,
+                                offer_name: specificOfferName,
                                 description: packDesc,
                                 price: offer.price?.value || 0,
                                 currency: offer.price?.currency_code || 'EUR',
