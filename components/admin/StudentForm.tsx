@@ -313,18 +313,6 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="startDate">Fecha de Inscripción *</Label>
-                        <Input
-                            id="startDate"
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            required
-                        />
-                        <p className="text-xs text-gray-500">A partir de esta fecha se calculará la morosidad.</p>
-                    </div>
-
-                    <div className="space-y-2">
                         <Label htmlFor="coach">Coach Asignado</Label>
                         <select
                             id="coach"
@@ -366,6 +354,17 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                             <h4 className="text-sm font-semibold mb-3">Configuración de Venta Inicial (Opcional)</h4>
 
                             <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="startDate">Fecha de Inicio *</Label>
+                                    <Input
+                                        id="startDate"
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                    />
+                                    <p className="text-xs text-gray-500">Fecha del primer pago / inicio del pack.</p>
+                                </div>
+
                                 <div className="space-y-2">
                                     <Label htmlFor="pack">Pack Seleccionado</Label>
                                     <select
