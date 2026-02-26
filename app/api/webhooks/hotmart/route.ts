@@ -165,33 +165,36 @@ async function handlePurchaseComplete(data: any) {
     let sale;
     let saleError;
 
-    const salePayload = {
-        student_id: studentId,
-        pack_id: packId,
-        total_amount: packPrice, // The total agreed price for the pack
-        amount_collected: totalAmount, // What was paid TODAY
-        gateway: 'hotmart',
-        transaction_id: transactionId,
-        status: 'paid',
-        metadata: {
-            purchase_id: data.purchase?.id,
-            buyer_email: data.buyer?.email,
-            product: data.product,
-            coach_id: coach_id,
-            closer_id: closer_id,
-            setter_id: setter_id,
-            link_id: linkId,
-            pack_offer_id: offerId,
-            hotmart_subscription_code: subscriptionCode, // KEY FOR FUTURE INSTALLMENTS
-            hotmart_recurrence_number: recurrenceNumber || 1
-        },
-    };
-
     if (existingSale) {
         console.log(`Found existing pending sale ${existingSale.id}. Updating it.`);
+
+        // When updating an existing pending sale (e.g. pre-assigned pack), 
+        // DO NOT overwrite the total_amount (which is the agreed debt).
+        // Only update the amount_collected and gateway info.
+
+        const updatePayload = {
+            amount_collected: totalAmount, // What was paid TODAY
+            gateway: 'hotmart',
+            transaction_id: transactionId,
+            status: 'paid', // Mark as paid/active
+            metadata: {
+                ...existingSale.metadata,
+                purchase_id: data.purchase?.id,
+                buyer_email: data.buyer?.email,
+                product: data.product,
+                coach_id: coach_id || existingSale.metadata?.coach_id,
+                closer_id: closer_id || existingSale.metadata?.closer_id,
+                setter_id: setter_id || existingSale.metadata?.setter_id,
+                link_id: linkId,
+                pack_offer_id: offerId,
+                hotmart_subscription_code: subscriptionCode,
+                hotmart_recurrence_number: recurrenceNumber || 1
+            },
+        };
+
         const { data: updatedSale, error: updateError } = await supabase
             .from('sales')
-            .update(salePayload as any)
+            .update(updatePayload as any)
             .eq('id', existingSale.id)
             .select()
             .single();
@@ -199,9 +202,32 @@ async function handlePurchaseComplete(data: any) {
         saleError = updateError;
     } else {
         console.log(`No pending sale found. Creating new sale.`);
+
+        const insertPayload = {
+            student_id: studentId,
+            pack_id: packId,
+            total_amount: packPrice, // The total agreed price for the pack
+            amount_collected: totalAmount, // What was paid TODAY
+            gateway: 'hotmart',
+            transaction_id: transactionId,
+            status: 'paid',
+            metadata: {
+                purchase_id: data.purchase?.id,
+                buyer_email: data.buyer?.email,
+                product: data.product,
+                coach_id: coach_id,
+                closer_id: closer_id,
+                setter_id: setter_id,
+                link_id: linkId,
+                pack_offer_id: offerId,
+                hotmart_subscription_code: subscriptionCode, // KEY FOR FUTURE INSTALLMENTS
+                hotmart_recurrence_number: recurrenceNumber || 1
+            },
+        };
+
         const { data: newSale, error: insertError } = await supabase
             .from('sales')
-            .insert(salePayload as any)
+            .insert(insertPayload as any)
             .select()
             .single();
         sale = newSale;

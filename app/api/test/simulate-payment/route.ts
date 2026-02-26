@@ -75,28 +75,27 @@ export async function POST(request: NextRequest) {
         let sale;
         let saleError;
 
-        const salePayload = {
-            student_id: link.student_id,
-            pack_id: link.pack_id,
-            total_amount: totalAmount,
-            amount_collected: totalAmount,
-            gateway: link.gateway,
-            transaction_id: `SIMULATED_${Date.now()}_${linkId}`,
-            status: 'paid',
-            metadata: {
-                test_mode: true,
-                simulated_at: new Date().toISOString(),
-                coach_id,
-                closer_id,
-                setter_id
-            },
-        };
-
         if (existingSale) {
             console.log(`[SIM] Found pending sale ${existingSale.id}. Updating.`);
+
+            const updatePayload = {
+                amount_collected: totalAmount,
+                gateway: link.gateway,
+                transaction_id: `SIMULATED_${Date.now()}_${linkId}`,
+                status: 'paid',
+                metadata: {
+                    ...existingSale.metadata,
+                    test_mode: true,
+                    simulated_at: new Date().toISOString(),
+                    coach_id: coach_id || existingSale.metadata?.coach_id,
+                    closer_id: closer_id || existingSale.metadata?.closer_id,
+                    setter_id: setter_id || existingSale.metadata?.setter_id
+                },
+            };
+
             const { data: updatedSale, error: updateError } = await supabase
                 .from('sales')
-                .update(salePayload as any)
+                .update(updatePayload as any)
                 .eq('id', existingSale.id)
                 .select()
                 .single();
@@ -104,9 +103,27 @@ export async function POST(request: NextRequest) {
             saleError = updateError;
         } else {
             console.log(`[SIM] No pending sale. Creating new.`);
+
+            const insertPayload = {
+                student_id: link.student_id,
+                pack_id: link.pack_id,
+                total_amount: totalAmount, // For new sales, the total is what was paid
+                amount_collected: totalAmount,
+                gateway: link.gateway,
+                transaction_id: `SIMULATED_${Date.now()}_${linkId}`,
+                status: 'paid',
+                metadata: {
+                    test_mode: true,
+                    simulated_at: new Date().toISOString(),
+                    coach_id,
+                    closer_id,
+                    setter_id
+                },
+            };
+
             const { data: newSale, error: insertError } = await supabase
                 .from('sales')
-                .insert(salePayload as any)
+                .insert(insertPayload as any)
                 .select()
                 .single();
             sale = newSale;

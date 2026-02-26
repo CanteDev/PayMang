@@ -151,13 +151,55 @@ export default function UnifiedLinkGenerator() {
                 }
             }
             prevSelectedStudentRef.current = selectedStudent;
+            setSelectedPack(''); // Reset pack when student changes
         } else if (!selectedStudent && prevSelectedStudentRef.current) {
             // Reset cuando se deselecciona
             setAssignedCoach('');
             setSelectedCloser('');
+            setSelectedPack('');
             prevSelectedStudentRef.current = '';
         }
     }, [selectedStudent, students, coaches]);
+
+    // Added: Load student's sales to filter packs
+    const [studentSales, setStudentSales] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchStudentSales = async () => {
+            if (!selectedStudent) {
+                setStudentSales([]);
+                return;
+            }
+
+            const { data } = await supabase
+                .from('sales')
+                .select('pack_id, total_amount, amount_collected')
+                .eq('student_id', selectedStudent);
+
+            if (data) {
+                setStudentSales(data);
+            }
+        };
+
+        fetchStudentSales();
+    }, [selectedStudent, supabase]);
+
+    // Calculate which packs should be visible for the selected student
+    const visiblePacks = packs.filter(pack => {
+        if (!selectedStudent) return false; // Don't show packs until student is selected
+
+        // Find if this student has this pack
+        const sale = studentSales.find(s => s.pack_id === pack.id);
+
+        // If they don't have the pack, they can't pay for it here
+        if (!sale) return false;
+
+        // If they have the pack, only show it if they still owe money
+        const amountCollected = Number(sale.amount_collected || 0);
+        const totalAmount = Number(sale.total_amount || 0);
+
+        return amountCollected < totalAmount;
+    });
 
     // Added: Load coaches when component mounts or as needed
     const loadCoaches = async () => {
@@ -431,21 +473,30 @@ export default function UnifiedLinkGenerator() {
 
                 {/* Pack */}
                 <div className="space-y-2">
-                    <Label htmlFor="pack">Pack *</Label>
+                    <Label htmlFor="pack">Pack Contractado con Deuda *</Label>
                     <select
                         id="pack"
                         value={selectedPack}
                         onChange={(e) => setSelectedPack(e.target.value)}
                         className="w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
-                        disabled={loading}
+                        disabled={loading || !selectedStudent}
                     >
                         <option value="">Seleccionar pack...</option>
-                        {packs.map(pack => (
-                            <option key={pack.id} value={pack.id}>
-                                {pack.name} - {pack.price.toFixed(2)}€
-                            </option>
-                        ))}
+                        {visiblePacks.map(pack => {
+                            const sale = studentSales.find(s => s.pack_id === pack.id);
+                            const pending = sale ? (Number(sale.total_amount) - Number(sale.amount_collected)).toFixed(2) : 0;
+                            return (
+                                <option key={pack.id} value={pack.id}>
+                                    {pack.name} - Pendiente: {pending}€
+                                </option>
+                            );
+                        })}
                     </select>
+                    {selectedStudent && visiblePacks.length === 0 && (
+                        <p className="text-xs text-orange-600">
+                            Este estudiante no tiene packs con deuda pendiente.
+                        </p>
+                    )}
                 </div>
 
                 {/* Gateway */}

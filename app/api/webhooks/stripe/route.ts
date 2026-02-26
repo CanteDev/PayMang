@@ -131,29 +131,28 @@ async function handleCheckoutCompleted(session: any) {
     let sale;
     let saleError;
 
-    const salePayload = {
-        student_id: studentId,
-        pack_id: packId,
-        total_amount: totalAmount,
-        amount_collected: totalAmount, // Stripe is full payment
-        gateway: 'stripe',
-        transaction_id: session.id,
-        status: 'paid',
-        metadata: {
-            payment_intent: session.payment_intent,
-            customer: session.customer,
-            coach_id, // Persist metadata in sale 
-            closer_id,
-            setter_id,
-            stripe_subscription_id: session.subscription // Clave para cuotas recurrentes
-        },
-    };
-
     if (existingSale) {
         console.log(`Found existing pending sale ${existingSale.id}. Updating it.`);
+
+        const updatePayload = {
+            amount_collected: totalAmount, // Stripe is full payment
+            gateway: 'stripe',
+            transaction_id: session.id,
+            status: 'paid',
+            metadata: {
+                ...existingSale.metadata,
+                payment_intent: session.payment_intent,
+                customer: session.customer,
+                coach_id: coach_id || existingSale.metadata?.coach_id,
+                closer_id: closer_id || existingSale.metadata?.closer_id,
+                setter_id: setter_id || existingSale.metadata?.setter_id,
+                stripe_subscription_id: session.subscription // Clave para cuotas recurrentes
+            },
+        };
+
         const { data: updatedSale, error: updateError } = await supabase
             .from('sales')
-            .update(salePayload as any)
+            .update(updatePayload as any)
             .eq('id', existingSale.id)
             .select()
             .single();
@@ -161,9 +160,28 @@ async function handleCheckoutCompleted(session: any) {
         saleError = updateError;
     } else {
         console.log(`No pending sale found. Creating new sale.`);
+
+        const insertPayload = {
+            student_id: studentId,
+            pack_id: packId,
+            total_amount: totalAmount,
+            amount_collected: totalAmount, // Stripe is full payment
+            gateway: 'stripe',
+            transaction_id: session.id,
+            status: 'paid',
+            metadata: {
+                payment_intent: session.payment_intent,
+                customer: session.customer,
+                coach_id, // Persist metadata in sale 
+                closer_id,
+                setter_id,
+                stripe_subscription_id: session.subscription // Clave para cuotas recurrentes
+            },
+        };
+
         const { data: newSale, error: insertError } = await supabase
             .from('sales')
-            .insert(salePayload as any)
+            .insert(insertPayload as any)
             .select()
             .single();
         sale = newSale;
