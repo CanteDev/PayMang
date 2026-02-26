@@ -115,18 +115,32 @@ async function handleCheckoutCompleted(session: any) {
         console.warn('Metadata vacía para link:', link.id);
     }
 
-    const { coach_id, closer_id, setter_id } = link.metadata || {};
+    const { coach_id, closer_id, setter_id, target_sale_id } = link.metadata || {};
     const totalAmount = link.pack.price;
 
     // 2. Deduplication: Look for an existing pending sale for this student and pack
-    const { data: existingSale } = await supabase
-        .from('sales')
-        .select('*')
-        .eq('student_id', studentId)
-        .eq('pack_id', packId)
-        .eq('status', 'pending')
-        .limit(1)
-        .single();
+    let existingSale = null;
+
+    if (target_sale_id) {
+        // Explicit deduplication using the exact sale ID
+        const { data } = await supabase
+            .from('sales')
+            .select('*')
+            .eq('id', target_sale_id)
+            .single();
+        existingSale = data;
+    } else {
+        // Fallback for legacy links
+        const { data } = await supabase
+            .from('sales')
+            .select('*')
+            .eq('student_id', studentId)
+            .eq('pack_id', packId)
+            .eq('status', 'pending')
+            .limit(1)
+            .single();
+        existingSale = data;
+    }
 
     let sale;
     let saleError;

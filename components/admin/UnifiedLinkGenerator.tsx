@@ -173,7 +173,7 @@ export default function UnifiedLinkGenerator() {
 
             const { data } = await supabase
                 .from('sales')
-                .select('pack_id, total_amount, amount_collected')
+                .select('id, pack_id, total_amount, amount_collected')
                 .eq('student_id', selectedStudent);
 
             if (data) {
@@ -340,6 +340,9 @@ export default function UnifiedLinkGenerator() {
 
             const shortCode = nanoid(8);
 
+            // Find the specific sale we are aiming to collect debt for
+            const targetSale = studentSales.find(s => s.pack_id === selectedPack);
+
             const { error: insertError } = await (supabase
                 .from('payment_links') as any)
                 .insert({
@@ -355,6 +358,7 @@ export default function UnifiedLinkGenerator() {
                         coach_id: assignedCoach,
                         closer_id: selectedCloser,
                         setter_id: selectedSetter || null,
+                        target_sale_id: targetSale ? targetSale.id : undefined
                     } as any,
                 } as any);
 
