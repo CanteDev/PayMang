@@ -74,10 +74,21 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
 
             if (existingPacks && existingPacks.length > 0) {
                 packId = existingPacks[0].id;
+
+                const updatePayload: any = {};
                 // Make sure the pack is active, in case it was previously deleted/deactivated
                 if (!existingPacks[0].is_active) {
+                    updatePayload.is_active = true;
+                }
+
+                // If pack price is 0 (or not set) and this new offer has a price, adopt it as base
+                if ((!existingPacks[0].price || existingPacks[0].price === 0) && p.price > 0) {
+                    updatePayload.price = p.price;
+                }
+
+                if (Object.keys(updatePayload).length > 0) {
                     await (supabase.from('packs') as any)
-                        .update({ is_active: true })
+                        .update(updatePayload)
                         .eq('id', packId);
                 }
             } else {
