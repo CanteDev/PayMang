@@ -243,18 +243,19 @@ export async function processStripeSync() {
             for (const price of prodPrices) {
                 let nameSuffix = '';
                 if (price.type === 'recurring') {
-                    nameSuffix = ` (${price.recurring?.interval_count} ${price.recurring?.interval})`;
+                    nameSuffix = ` (Recurrente ${price.recurring?.interval_count} ${price.recurring?.interval})`;
+                } else if (prodPrices.length > 1) {
+                    nameSuffix = ' (Pago Único)';
                 }
 
                 standardizedProducts.push({
-                    external_id: prod.id,
+                    external_id: price.id, // CRITICAL: Use Price ID, not Product ID
                     name: prod.name,
-                    offer_name: prodPrices.length > 1 ? `${prod.name}${nameSuffix} (Stripe)` : `${prod.name} (Stripe)`,
+                    offer_name: `${prod.name}${nameSuffix} (Stripe)`,
                     description: prod.description || undefined,
                     price: parseFloat(price.unit_amount_decimal || '0') / 100,
                     currency: price.currency.toUpperCase()
                 });
-                break; // Usually 1 active price per product in standard setups
             }
         }
 

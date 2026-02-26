@@ -131,22 +131,8 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
     });
 
     try {
-        const session = await stripe.checkout.sessions.create({
+        const sessionConfig: Stripe.Checkout.SessionCreateParams = {
             payment_method_types: ['card'],
-            line_items: [
-                {
-                    price_data: {
-                        currency: offer ? offer.currency : 'eur',
-                        product_data: {
-                            name: offer ? offer.name : pack.name,
-                            description: pack.description || `Pago por ${pack.name}`,
-                        },
-                        unit_amount: Math.round((offer ? offer.price : pack.price) * 100), // cents
-                    },
-                    quantity: 1,
-                },
-            ],
-            mode: 'payment',
             success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${origin}/cancel`,
             customer_email: student.email,
@@ -159,7 +145,37 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
                 source: 'paymang_link',
                 offer_id: offer ? offer.id : null
             },
-        });
+            mode: 'payment',
+            line_items: []
+        };
+
+        if (offer && offer.gateway === 'stripe' && offer.external_id && offer.external_id.startsWith('price_')) {
+            const stripePrice = await stripe.prices.retrieve(offer.external_id);
+            sessionConfig.line_items = [
+                {
+                    price: offer.external_id,
+                    quantity: 1,
+                },
+            ];
+            sessionConfig.mode = stripePrice.type === 'recurring' ? 'subscription' : 'payment';
+        } else {
+            sessionConfig.line_items = [
+                {
+                    price_data: {
+                        currency: offer ? offer.currency : 'eur',
+                        product_data: {
+                            name: offer ? offer.name : pack.name,
+                            description: pack.description || `Pago por ${pack.name}`,
+                        },
+                        unit_amount: Math.round((offer ? offer.price : pack.price) * 100), // cents
+                    },
+                    quantity: 1,
+                },
+            ];
+            sessionConfig.mode = 'payment';
+        }
+
+        const session = await stripe.checkout.sessions.create(sessionConfig);
 
         return session.url;
     } catch (error) {
