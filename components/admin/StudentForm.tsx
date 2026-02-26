@@ -190,7 +190,11 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
 
             if (student?.id) {
                 // Actualizar estudiante existente usando la Server Action
-                resultStudent = await updateStudentAction(student.id, studentData);
+                const response = await updateStudentAction(student.id, studentData);
+                if (!response.success) {
+                    throw new Error(response.error);
+                }
+                resultStudent = response.data;
             } else {
                 // Crear nuevo estudiante (mantenemos la logica original)
                 const { data, error: insertError } = await (supabase
