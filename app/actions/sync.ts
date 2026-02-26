@@ -30,7 +30,7 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
     for (const p of products) {
         processedIds.add(p.external_id);
 
-        // 1. Check if offer exists by external_id (applies to all gateways including Hotmart)
+        // 1. Check if offer exists by external_id
         const { data: existingOffer } = await (supabase
             .from('pack_offers') as any)
             .select('id, pack_id, price')
@@ -39,8 +39,8 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
             .maybeSingle();
 
         if (existingOffer) {
-            // EXISTS: Update price and ensure it is active
-            // Do not overwrite price if the incoming price is 0 (e.g., Hotmart default)
+            // EXISTS: Update and ensure it is active.
+            // Do NOT overwrite price if the incoming price is 0 (Hotmart API always returns 0)
             const updatePayload: any = {
                 is_active: true,
                 updated_at: new Date().toISOString()
@@ -63,9 +63,8 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
         } else {
             // DOES NOT EXIST: Create or Link Pack, then Create Offer
 
-            // Search for existing pack with EXACT SAME NAME 
-            // We use standard string matching (case-insensitive if possible, but exact is safer)
-            const { data: existingPacks, error: packSearchError } = await (supabase
+            // Search for existing pack with EXACT SAME NAME
+            const { data: existingPacks } = await (supabase
                 .from('packs') as any)
                 .select('id, name, is_active')
                 .eq('name', p.name)
@@ -100,8 +99,8 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
                 packId = newPack.id;
             }
 
-            // Insert new Pack Offer for all gateways (including Hotmart)
-            // Use p.price if > 0, otherwise leave price as 0 (admin will set it manually)
+            // Insert new Pack Offer
+            // For Hotmart: price will be 0 (admin sets it manually); existing offers are never overwritten with 0
             const { error: insertOfferError } = await (supabase
                 .from('pack_offers') as any)
                 .insert({
@@ -124,8 +123,8 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
     }
 
     // --- PURGE MISSING OFFERS ---
-    // NO PURGAMOS HOTMART porque la API de Hotmart solo devuelve IDs de Producto Padre,
-    // y estaríamos desactivando todas las Ofertas específicas importadas manualmente o por CSV.
+    // Skip purge for Hotmart: the API only returns Product IDs, not Offer codes,
+    // so we'd incorrectly deactivate all manually-configured offers.
     let deactivatedCount = 0;
 
     if (gateway !== 'hotmart') {
@@ -199,16 +198,13 @@ export async function processStripeSync() {
                 }
 
                 standardizedProducts.push({
-                    external_id: prod.id, // Using product ID as the main anchor. Note: If a product has multiple active prices, this might conflict.
-                    // To be safer, we should anchor by Product ID, or a composite. We will just use the product ID and first price to be safe, or just append price id if multiple.
-                    // Since user has 1 product to 1 payment link logic generally, we will just use prod.id. 
-                    // If there are multiple prices for 1 product, we differentiate external_id by appending price.id
+                    external_id: prod.id,
                     name: prodPrices.length > 1 ? `${prod.name}${nameSuffix}` : prod.name,
                     description: prod.description || undefined,
                     price: parseFloat(price.unit_amount_decimal || '0') / 100,
                     currency: price.currency.toUpperCase()
                 });
-                break; // Usually 1 active price per product in standard setups. We break here. Replace logic if needed.
+                break; // Usually 1 active price per product in standard setups
             }
         }
 
@@ -224,20 +220,12 @@ export async function processStripeSync() {
 
 export async function processHotmartSync() {
     console.log("Starting Hotmart Sync...");
-    // Note: Hotmart's API structure for fetching all products can be tricky.
-    // Most creators use /product/rest/v1/products 
-    // We will attempt a standard fetch, if it is not available or differs, 
-    // we will throw an error telling them API limitation or asking for specific scopes.
-
     try {
-        // Using the request wrapper built in hotmart.ts
-        // Must use absolute URL to bypass the `payments/v1` base URL defined in the wrapper
         const response: any = await hotmart.request('https://developers.hotmart.com/products/api/v1/products', {
             method: 'GET'
         });
 
         const items = response?.items || response?.data || [];
-
         // Filter ONLY active products so paused/drafts are properly pruned later
         const activeItems = items.filter((prod: any) => prod.status === 'ACTIVE');
 
@@ -245,8 +233,9 @@ export async function processHotmartSync() {
             external_id: String(prod.id),
             name: prod.name || `Hotmart Product ${prod.id}`,
             description: prod.description || '',
-            price: 0, // Hotmart prices are attached to offers/plans, pulling exact default price here is hard via API without deep dive. Default 0.
-            currency: 'EUR' // Default
+            // Hotmart API never returns offer prices. Admin sets these manually on each pack_offer.
+            price: 0,
+            currency: 'EUR'
         }));
 
         return await syncGatewayProducts('hotmart', standardizedProducts);
