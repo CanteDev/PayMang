@@ -33,6 +33,7 @@ interface Student {
         total_amount: number;
         status: string;
         gateway: string;
+        amount_collected?: number;
     }[];
 }
 
@@ -151,21 +152,11 @@ export default function AdminStudentsPage() {
         const totalAgreed = student.sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
         if (totalAgreed === 0) return { paid: 0, total: 0, percentage: 0 };
 
-        // Sum gateway sales (Stripe, Hotmart, Sequra, etc.)
-        const gatewaySales = student.sales
-            ?.filter(s => s.status === 'paid')
-            .reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
+        // The single source of truth for paid amounts is now `amount_collected` on the sale,
+        // which gets updated by webhooks (Hotmart, Stripe), simulator, and manual payments (`registerPayment`).
+        const amountCollected = student.sales?.reduce((sum, s) => sum + Number(s.amount_collected || 0), 0) || 0;
 
-        // Sum manual payments (only those NOT from a gateway, to avoid double counting)
-        const manualPaid = student.payments
-            ?.filter(p => p.status === 'paid')
-            .reduce((sum, p) => sum + p.amount, 0) || 0;
-
-        // Use gateway sales if they exist, otherwise fall back to manual payments
-        // (A student with a gateway sale and a manual payment - use the greater value to avoid double count)
-        const paidRaw = gatewaySales > 0 ? gatewaySales + manualPaid : manualPaid;
-
-        let paid = Number(Math.min(paidRaw, totalAgreed).toFixed(2));
+        let paid = Number(Math.min(amountCollected, totalAgreed).toFixed(2));
         const total = Number(totalAgreed.toFixed(2));
 
         // Auto-correct 1-5 cent divisional variances

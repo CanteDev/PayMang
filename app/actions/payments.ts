@@ -59,6 +59,20 @@ export async function registerPayment(data: RegisterPaymentData) {
 
         if (error) return { error: error.message };
 
+        // Add the payment amount to the sale's amount_collected
+        const { data: saleData } = await adminSupabase
+            .from('sales')
+            .select('amount_collected')
+            .eq('id', data.saleId)
+            .single();
+
+        if (saleData) {
+            await adminSupabase
+                .from('sales')
+                .update({ amount_collected: Number(saleData.amount_collected || 0) + Number(data.amount) })
+                .eq('id', data.saleId);
+        }
+
         // Generate commissions for this payment
         await generateManualCommissions(adminSupabase, data.studentId, data.saleId, data.amount, data.paymentId, false);
     } else {
@@ -79,6 +93,21 @@ export async function registerPayment(data: RegisterPaymentData) {
             .single();
 
         if (error) return { error: error.message };
+
+        // Add the payment amount to the sale's amount_collected
+        const { data: saleData } = await adminSupabase
+            .from('sales')
+            .select('amount_collected')
+            .eq('id', data.saleId)
+            .single();
+
+        if (saleData) {
+            await adminSupabase
+                .from('sales')
+                .update({ amount_collected: Number(saleData.amount_collected || 0) + Number(data.amount) })
+                .eq('id', data.saleId);
+        }
+
         if (newPayment) {
             await generateManualCommissions(adminSupabase, data.studentId, data.saleId, data.amount, newPayment.id, true);
         }
