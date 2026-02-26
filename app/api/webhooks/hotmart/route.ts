@@ -151,40 +151,70 @@ async function handlePurchaseComplete(data: any) {
     const { coach_id, closer_id, setter_id } = link.metadata || {};
     const packPrice = link.offer?.price || link.pack?.price || totalAmount;
 
-    // 2. Create sale, inyectando meta de suscripción si la hay
-    const { data: sale, error: saleError } = await supabase
+    // 2. Deduplication: Look for an existing pending sale for this student and pack
+    // (This handles the case where the admin pre-assigned the pack during registration)
+    const { data: existingSale } = await supabase
         .from('sales')
-        .insert({
-            student_id: studentId,
-            pack_id: packId,
-            total_amount: packPrice, // Lo que cuesta en total el pack
-            amount_collected: totalAmount, // Lo que ha pagado HOY
-            gateway: 'hotmart',
-            transaction_id: transactionId,
-            status: 'paid',
-            metadata: {
-                purchase_id: data.purchase?.id,
-                buyer_email: data.buyer?.email,
-                product: data.product,
-                coach_id: coach_id,
-                closer_id: closer_id,
-                setter_id: setter_id,
-                link_id: linkId,
-                pack_offer_id: offerId,
-                hotmart_subscription_code: subscriptionCode, // CLAVE PARA FUTURAS CUOTAS
-                hotmart_recurrence_number: recurrenceNumber || 1
-            },
-        } as any)
-        .select()
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('pack_id', packId)
+        .eq('status', 'pending')
+        .limit(1)
         .single();
 
-    if (saleError) {
-        console.error('Error creating sale:', saleError);
+    let sale;
+    let saleError;
+
+    const salePayload = {
+        student_id: studentId,
+        pack_id: packId,
+        total_amount: packPrice, // The total agreed price for the pack
+        amount_collected: totalAmount, // What was paid TODAY
+        gateway: 'hotmart',
+        transaction_id: transactionId,
+        status: 'paid',
+        metadata: {
+            purchase_id: data.purchase?.id,
+            buyer_email: data.buyer?.email,
+            product: data.product,
+            coach_id: coach_id,
+            closer_id: closer_id,
+            setter_id: setter_id,
+            link_id: linkId,
+            pack_offer_id: offerId,
+            hotmart_subscription_code: subscriptionCode, // KEY FOR FUTURE INSTALLMENTS
+            hotmart_recurrence_number: recurrenceNumber || 1
+        },
+    };
+
+    if (existingSale) {
+        console.log(`Found existing pending sale ${existingSale.id}. Updating it.`);
+        const { data: updatedSale, error: updateError } = await supabase
+            .from('sales')
+            .update(salePayload as any)
+            .eq('id', existingSale.id)
+            .select()
+            .single();
+        sale = updatedSale;
+        saleError = updateError;
+    } else {
+        console.log(`No pending sale found. Creating new sale.`);
+        const { data: newSale, error: insertError } = await supabase
+            .from('sales')
+            .insert(salePayload as any)
+            .select()
+            .single();
+        sale = newSale;
+        saleError = insertError;
+    }
+
+    if (saleError || !sale) {
+        console.error('Error processing sale (insert/update):', saleError);
         return;
     }
 
-    // 2.5 Sincronizar cuotas del alumno
-    await syncGatewayPaymentToInstallments(supabase, studentId, totalAmount, 'hotmart');
+    // 2.5 Sincronizar cuotas del alumno (Restricted to THIS sale)
+    await syncGatewayPaymentToInstallments(supabase, studentId, sale.id, totalAmount, 'hotmart');
 
     // 3. Update link status
     await supabase

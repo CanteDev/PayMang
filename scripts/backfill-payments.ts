@@ -27,7 +27,7 @@ async function run() {
         // Let's reset their pending status via the sync function
         // Note: this function naturally skips already-paid installments, 
         // but if they were manually paid vs webhook paid, it's fine.
-        await syncGatewayPaymentToInstallments(supabase, sale.student_id, sale.amount_collected, sale.gateway);
+        await syncGatewayPaymentToInstallments(supabase, sale.student_id, sale.id, sale.amount_collected, sale.gateway);
     }
     console.log("Done backfilling.");
 }

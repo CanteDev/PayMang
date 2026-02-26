@@ -15,9 +15,10 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Wallet, Plus, Check, X, AlertCircle, Calendar, CreditCard } from 'lucide-react';
-import { Payment } from '@/types/database';
+import { Wallet, Plus, Check, X, AlertCircle, Calendar, CreditCard, Edit2, PackagePlus } from 'lucide-react';
+import { Payment, Pack } from '@/types/database';
 import { registerPayment } from '@/app/actions/payments';
+import { createSaleAction, updateSaleAction } from '@/app/actions/sales';
 
 interface StudentPaymentDetailsProps {
     student: {
@@ -42,6 +43,19 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
     const [newNotes, setNewNotes] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [selectedSaleId, setSelectedSaleId] = useState<string>('');
+
+    // New Sale Form
+    const [showAddSale, setShowAddSale] = useState(false);
+    const [salePackId, setSalePackId] = useState('');
+    const [salePrice, setSalePrice] = useState(0);
+    const [saleMethod, setSaleMethod] = useState<'upfront' | 'installments'>('upfront');
+    const [saleInstallments, setSaleInstallments] = useState(1);
+    const [salePeriod, setSalePeriod] = useState(1);
+    const [saleStartDate, setSaleStartDate] = useState(new Date().toISOString().split('T')[0]);
+
+    // Edit Sale
+    const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
+    const [packs, setPacks] = useState<Pack[]>([]);
 
     const supabase = createClient();
 
@@ -79,8 +93,24 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
             setPayments(paymentsData);
         }
 
+        // Fetch packs
+        const { data: packsData } = await supabase
+            .from('packs')
+            .select('*')
+            .eq('is_active', true)
+            .order('name');
+        if (packsData) setPacks(packsData);
+
         setLoading(false);
     };
+
+    // Auto-calculate price when pack selection changes in Add Sale
+    useEffect(() => {
+        if (salePackId && packs.length > 0) {
+            const pack = packs.find(p => p.id === salePackId);
+            if (pack) setSalePrice(pack.price);
+        }
+    }, [salePackId, packs]);
 
     const handleAddPayment = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -117,6 +147,7 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
     const handlePayExisting = async (payment: Payment) => {
         if (!confirm(`¿Confirmar pago de ${payment.amount}€?`)) return;
 
+        setSubmitting(true);
         try {
             const res = await registerPayment({
                 studentId: student.id,
@@ -132,7 +163,76 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
             loadData();
         } catch (error) {
             console.error('Error confirming payment:', error);
+        } finally {
+            setSubmitting(false);
         }
+    };
+
+    const handleCreateSale = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!salePackId) return;
+
+        setSubmitting(true);
+        try {
+            const res = await createSaleAction(student.id, {
+                pack_id: salePackId,
+                agreed_price: salePrice,
+                payment_method: saleMethod,
+                total_installments: saleMethod === 'installments' ? saleInstallments : 1,
+                installment_period: salePeriod,
+                start_date: saleStartDate
+            });
+
+            if (res.success) {
+                setShowAddSale(false);
+                setSalePackId('');
+                loadData();
+            } else {
+                alert(res.error || 'Error al crear la venta');
+            }
+        } catch (error) {
+            console.error('Error creating sale:', error);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleUpdateSale = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingSaleId) return;
+
+        setSubmitting(true);
+        try {
+            const res = await updateSaleAction(editingSaleId, {
+                pack_id: salePackId,
+                agreed_price: salePrice,
+                payment_method: saleMethod,
+                total_installments: saleMethod === 'installments' ? saleInstallments : 1,
+                installment_period: salePeriod,
+                start_date: saleStartDate
+            });
+
+            if (res.success) {
+                setEditingSaleId(null);
+                loadData();
+            } else {
+                alert(res.error || 'Error al actualizar la venta');
+            }
+        } catch (error) {
+            console.error('Error updating sale:', error);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const startEditingSale = (sale: any) => {
+        setEditingSaleId(sale.id);
+        setSalePackId(sale.pack_id);
+        setSalePrice(sale.total_amount);
+        setSaleMethod(sale.payment_method || 'upfront');
+        setSaleInstallments(sale.total_installments || 1);
+        setSalePeriod(sale.installment_period || 1);
+        setSaleStartDate(sale.start_date);
     };
 
     // Totals across ALL sales for the header summary
@@ -194,8 +294,108 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                                 {showAddPayment ? <X className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
                                 {showAddPayment ? 'Cancelar' : 'Registrar Pago Manual'}
                             </Button>
+                            <Button
+                                size="sm"
+                                onClick={() => {
+                                    setShowAddSale(!showAddSale);
+                                    if (!showAddSale) {
+                                        setSalePackId('');
+                                        setSaleMethod('upfront');
+                                        setSaleInstallments(1);
+                                        setSaleStartDate(new Date().toISOString().split('T')[0]);
+                                    }
+                                }}
+                                variant={showAddSale ? "secondary" : "outline"}
+                                className={!showAddSale ? "border-primary text-primary hover:bg-primary/5" : ""}
+                            >
+                                {showAddSale ? <X className="w-4 h-4 mr-2" /> : <PackagePlus className="w-4 h-4 mr-2" />}
+                                {showAddSale ? 'Cancelar' : 'Añadir Pack'}
+                            </Button>
                         </div>
                     </div>
+
+                    {/* Add Sale Form */}
+                    {showAddSale && (
+                        <div className="bg-blue-50/50 p-4 rounded-lg mb-6 border border-blue-100 animate-in fade-in slide-in-from-top-2">
+                            <h4 className="font-semibold text-sm mb-3">Añadir Nuevo Pack al Alumno</h4>
+                            <form onSubmit={handleCreateSale} className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Seleccionar Pack</Label>
+                                        <select
+                                            required
+                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                            value={salePackId}
+                                            onChange={e => setSalePackId(e.target.value)}
+                                        >
+                                            <option value="">-- Seleccionar --</option>
+                                            {packs.map(p => (
+                                                <option key={p.id} value={p.id}>{p.name} ({p.price}€)</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Importe Acordado (€)</Label>
+                                        <Input
+                                            type="number"
+                                            value={salePrice}
+                                            onChange={e => setSalePrice(Number(e.target.value))}
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Modalidad</Label>
+                                        <select
+                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                            value={saleMethod}
+                                            onChange={e => setSaleMethod(e.target.value as any)}
+                                        >
+                                            <option value="upfront">Pago Único</option>
+                                            <option value="installments">Cuotas</option>
+                                        </select>
+                                    </div>
+                                    {saleMethod === 'installments' && (
+                                        <>
+                                            <div className="space-y-2">
+                                                <Label>Nº Cuotas</Label>
+                                                <Input
+                                                    type="number"
+                                                    min="1"
+                                                    value={saleInstallments}
+                                                    onChange={e => setSaleInstallments(Number(e.target.value))}
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Frecuencia (Meses)</Label>
+                                                <Input
+                                                    type="number"
+                                                    min="1"
+                                                    value={salePeriod}
+                                                    onChange={e => setSalePeriod(Number(e.target.value))}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+                                    <div className="space-y-2">
+                                        <Label>Fecha Inicio</Label>
+                                        <Input
+                                            type="date"
+                                            value={saleStartDate}
+                                            onChange={e => setSaleStartDate(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex justify-end pt-2">
+                                    <Button type="submit" disabled={submitting}>
+                                        {submitting ? 'Creando...' : 'Confirmar Venta'}
+                                    </Button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
 
                     {/* Add Payment Form */}
                     {showAddPayment && (
@@ -301,7 +501,82 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                                         <Badge variant={salePaid >= sale.total_amount ? "default" : "secondary"}>
                                             {salePaid >= sale.total_amount ? 'Completado' : `${saleProgress}%`}
                                         </Badge>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-8 w-8 p-0 ml-2"
+                                            onClick={() => startEditingSale(sale)}
+                                        >
+                                            <Edit2 className="w-4 h-4 text-gray-500" />
+                                        </Button>
                                     </div>
+
+                                    {/* Edit Sale Form In-place */}
+                                    {editingSaleId === sale.id && (
+                                        <div className="p-4 bg-yellow-50/50 border-b border-yellow-100 animate-in fade-in">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <h4 className="text-sm font-semibold text-yellow-800">Reestructurar Plan de Venta</h4>
+                                                <Button size="sm" variant="ghost" onClick={() => setEditingSaleId(null)}>
+                                                    <X className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                            <form onSubmit={handleUpdateSale} className="space-y-4">
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <Label>Importe Acordado (€)</Label>
+                                                        <Input
+                                                            type="number"
+                                                            value={salePrice}
+                                                            onChange={e => setSalePrice(Number(e.target.value))}
+                                                            required
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Modalidad</Label>
+                                                        <select
+                                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                                            value={saleMethod}
+                                                            onChange={e => setSaleMethod(e.target.value as any)}
+                                                        >
+                                                            <option value="upfront">Pago Único</option>
+                                                            <option value="installments">Cuotas</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                {saleMethod === 'installments' && (
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="space-y-2">
+                                                            <Label>Total Cuotas Planificadas</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="1"
+                                                                value={saleInstallments}
+                                                                onChange={e => setSaleInstallments(Number(e.target.value))}
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label>Periodo (Meses)</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="1"
+                                                                value={salePeriod}
+                                                                onChange={e => setSalePeriod(Number(e.target.value))}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <div className="bg-yellow-100/50 p-2 rounded text-[10px] text-yellow-800 flex items-start gap-2">
+                                                    <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                                                    <p>Al guardar, las cuotas <strong>PENDIENTES</strong> se recalcularán basadas en la deuda restante. Los pagos recibidos NO se verán afectados.</p>
+                                                </div>
+                                                <div className="flex justify-end gap-2">
+                                                    <Button type="submit" size="sm" disabled={submitting}>
+                                                        {submitting ? 'Guardando...' : 'Aplicar Cambios'}
+                                                    </Button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    )}
 
                                     {/* Sale Payments */}
                                     <div className="p-3 space-y-2">

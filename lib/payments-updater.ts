@@ -10,16 +10,18 @@ import { SupabaseClient } from '@supabase/supabase-js';
 export async function syncGatewayPaymentToInstallments(
     supabase: SupabaseClient,
     studentId: string,
+    saleId: string,
     amountReceived: number,
     gateway: string
 ) {
-    if (!studentId || amountReceived <= 0) return;
+    if (!studentId || !saleId || amountReceived <= 0) return;
 
-    // 1. Fetch all pending payments for this student ordered by due date
+    // 1. Fetch pending payments for THIS specific sale ordered by due date
     const { data: pendingPayments, error: fetchError } = await (supabase
         .from('payments') as any)
         .select('*')
         .eq('student_id', studentId)
+        .eq('sale_id', saleId)
         .eq('status', 'pending')
         .order('due_date', { ascending: true });
 

@@ -118,36 +118,65 @@ async function handleCheckoutCompleted(session: any) {
     const { coach_id, closer_id, setter_id } = link.metadata || {};
     const totalAmount = link.pack.price;
 
-    // 2. Crear venta
-    const { data: sale, error: saleError } = await supabase
+    // 2. Deduplication: Look for an existing pending sale for this student and pack
+    const { data: existingSale } = await supabase
         .from('sales')
-        .insert({
-            student_id: studentId,
-            pack_id: packId,
-            total_amount: totalAmount,
-            amount_collected: totalAmount, // Stripe is full payment
-            gateway: 'stripe',
-            transaction_id: session.id,
-            status: 'paid',
-            metadata: {
-                payment_intent: session.payment_intent,
-                customer: session.customer,
-                coach_id, // Persist metadata in sale 
-                closer_id,
-                setter_id,
-                stripe_subscription_id: session.subscription // Clave para cuotas recurrentes
-            },
-        })
-        .select()
+        .select('*')
+        .eq('student_id', studentId)
+        .eq('pack_id', packId)
+        .eq('status', 'pending')
+        .limit(1)
         .single();
 
-    if (saleError) {
-        console.error('Error creando venta:', saleError);
+    let sale;
+    let saleError;
+
+    const salePayload = {
+        student_id: studentId,
+        pack_id: packId,
+        total_amount: totalAmount,
+        amount_collected: totalAmount, // Stripe is full payment
+        gateway: 'stripe',
+        transaction_id: session.id,
+        status: 'paid',
+        metadata: {
+            payment_intent: session.payment_intent,
+            customer: session.customer,
+            coach_id, // Persist metadata in sale 
+            closer_id,
+            setter_id,
+            stripe_subscription_id: session.subscription // Clave para cuotas recurrentes
+        },
+    };
+
+    if (existingSale) {
+        console.log(`Found existing pending sale ${existingSale.id}. Updating it.`);
+        const { data: updatedSale, error: updateError } = await supabase
+            .from('sales')
+            .update(salePayload as any)
+            .eq('id', existingSale.id)
+            .select()
+            .single();
+        sale = updatedSale;
+        saleError = updateError;
+    } else {
+        console.log(`No pending sale found. Creating new sale.`);
+        const { data: newSale, error: insertError } = await supabase
+            .from('sales')
+            .insert(salePayload as any)
+            .select()
+            .single();
+        sale = newSale;
+        saleError = insertError;
+    }
+
+    if (saleError || !sale) {
+        console.error('Error processing Stripe sale (insert/update):', saleError);
         return;
     }
 
-    // 2.5 Sincronizar cuotas del alumno
-    await syncGatewayPaymentToInstallments(supabase, studentId, totalAmount, 'stripe');
+    // 2.5 Sincronizar cuotas del alumno (Restricted to THIS sale)
+    await syncGatewayPaymentToInstallments(supabase, studentId, sale.id, totalAmount, 'stripe');
 
     // 3. Actualizar estado del link
     await supabase
