@@ -1,26 +1,28 @@
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import path from 'path';
 
-dotenv.config();
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+async function checkConstraint() {
+    const { data, error } = await supabase.rpc('get_table_constraints', { table_name: 'payments' });
+    if (error) {
+        console.error('RPC Error (might not exist):', error);
 
-const supabase = createClient(supabaseUrl, serviceRoleKey);
-
-console.log('🧪 Testing valid payload...');
-const { error: insErr, data: data2 } = await supabase
-    .from('payments')
-    .insert({
-        student_id: '154032d1-218f-4ed1-8d00-410a8ad6d013', // AL9
-        amount: 100,
-        status: 'pending',
-        due_date: '2026-04-01',
-        method: 'manual'
-    });
-
-if (insErr) {
-    console.log('✅ Error:', insErr);
-} else {
-    console.log('⚠️ Success');
+        // Let's just try to insert a fake row with random methods to see which one passes
+        const methodsToTest = ['transfer', 'manual', 'stripe', 'hotmart', 'cash', 'other'];
+        for (const m of methodsToTest) {
+            const { error: err } = await supabase.from('payments').insert({
+                student_id: '00000000-0000-0000-0000-000000000000', // Fake ID (will fail FK)
+                amount: 10,
+                status: 'pending',
+                method: m
+            });
+            console.log(`Method '${m}' failed with:`, err?.message || 'Success?');
+        }
+    } else {
+        console.log(data);
+    }
 }
+checkConstraint();

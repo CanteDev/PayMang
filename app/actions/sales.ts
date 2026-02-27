@@ -60,7 +60,7 @@ export async function createSaleAction(studentId: string, salePayload: any) {
                     amount: amount,
                     due_date: dueDate.toISOString().split('T')[0],
                     status: 'pending',
-                    method: 'manual'
+                    method: null
                 });
             }
 
@@ -158,7 +158,7 @@ export async function updateSaleAction(saleId: string, payload: any) {
                     amount: amount,
                     due_date: dueDate.toISOString().split('T')[0],
                     status: 'pending',
-                    method: 'manual'
+                    method: null
                 });
             }
 
