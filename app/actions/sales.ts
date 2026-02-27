@@ -22,9 +22,9 @@ export async function createSaleAction(studentId: string, salePayload: any) {
             total_installments: salePayload.total_installments,
             installment_period: salePayload.installment_period,
             start_date: salePayload.start_date,
-            closer_id: salePayload.closer_id,
-            coach_id: salePayload.coach_id,
-            setter_id: salePayload.setter_id,
+            closer_id: salePayload.closer_id || null,
+            coach_id: salePayload.coach_id || null,
+            setter_id: salePayload.setter_id || null,
             metadata: salePayload.metadata || {}
         };
 
@@ -36,7 +36,7 @@ export async function createSaleAction(studentId: string, salePayload: any) {
 
         if (saleError) {
             console.error('Failed to create sale:', saleError);
-            return { success: false, error: 'Failed to create sale' };
+            return { success: false, error: `Failed to create sale: ${saleError.message || JSON.stringify(saleError)}` };
         }
 
         // Generate initial pending installments
@@ -187,9 +187,9 @@ export async function updateSaleAction(saleId: string, payload: any) {
                 total_installments: payload.total_installments,
                 installment_period: payload.installment_period,
                 start_date: payload.start_date,
-                closer_id: payload.closer_id,
-                coach_id: payload.coach_id,
-                setter_id: payload.setter_id
+                closer_id: payload.closer_id || null,
+                coach_id: payload.coach_id || null,
+                setter_id: payload.setter_id || null
             })
             .eq('id', saleId)
             .select()

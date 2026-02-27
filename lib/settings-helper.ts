@@ -1,10 +1,13 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 import { CONFIG } from '@/config/app.config';
 
-type GatewayConfig<T> = T;
-
+/**
+ * Gets the gateway config from app_settings using the service role key.
+ * This ensures it works in public routes (like /p/[shortCode]) where there's no user session.
+ */
 export async function getGatewayConfig(gateway: 'stripe' | 'hotmart' | 'sequra'): Promise<any> {
-    const supabase = await createClient();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
     // Config keys in DB
     const keyMap = {
@@ -15,25 +18,25 @@ export async function getGatewayConfig(gateway: 'stripe' | 'hotmart' | 'sequra')
 
     const dbKey = keyMap[gateway];
 
-    // Try to fetch from DB
-    const { data, error } = await supabase
-        .from('app_settings')
-        .select('value')
-        .eq('key', dbKey)
-        .single<any>(); // Force any to avoid 'never' issue with JSONB typings
+    // Use service role key to bypass RLS - works from any context (public or authenticated)
+    if (serviceRoleKey) {
+        const supabase = createClient(supabaseUrl, serviceRoleKey);
+        const { data, error } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', dbKey)
+            .single<any>();
 
-    if (error || !data) {
-        // Fallback to Env Vars / CONFIG
-        console.log(`Using environment config for ${gateway} (DB config not found or error)`);
-        return getEnvFallback(gateway);
+        if (!error && data) {
+            const dbConfig = data.value;
+            const envConfig = getEnvFallback(gateway);
+            return { ...envConfig, ...dbConfig };
+        }
     }
 
-    // Merge with defaults/env if partial config? 
-    // For now, if DB has it, use it. But maybe merge is safer.
-    const dbConfig = data.value;
-    const envConfig = getEnvFallback(gateway);
-
-    return { ...envConfig, ...dbConfig };
+    // Fallback to env vars if service role key is not set or DB query fails
+    console.log(`Using environment config for ${gateway} (DB config not found or service role key missing)`);
+    return getEnvFallback(gateway);
 }
 
 function getEnvFallback(gateway: 'stripe' | 'hotmart' | 'sequra') {
@@ -58,7 +61,7 @@ function getEnvFallback(gateway: 'stripe' | 'hotmart' | 'sequra') {
                 merchant_id: CONFIG.GATEWAYS.SEQURA.MERCHANT_ID,
                 api_key: CONFIG.GATEWAYS.SEQURA.API_KEY,
                 api_url: CONFIG.GATEWAYS.SEQURA.API_URL,
-                environment: 'sandbox', // Default fallback
+                environment: 'sandbox',
             };
     }
 }
