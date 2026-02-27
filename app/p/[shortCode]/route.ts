@@ -139,12 +139,13 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
     const stripe = new Stripe(secretKey);
 
     // Sincronizar nombre del cliente antes de crear la sesión
-    // Usamos validación estricta para evitar errores de Stripe por emails malformados (ej: al2@mxi)
-    const isValidEmail = !!(student.email && student.email.includes('@') && student.email.includes('.'));
+    // Stripe requiere al menos un '@' para pre-rellenar el campo email
+    const isValidEmail = !!(student.email && student.email.includes('@'));
     let stripeCustomerId: string | undefined = undefined;
 
     try {
-        if (isValidEmail) {
+        // Para crear un objeto Cliente en Stripe sí solemos ser más estrictos
+        if (isValidEmail && student.email.includes('.')) {
             stripeCustomerId = await getOrCreateStripeCustomer(stripe, student);
         }
     } catch (err) {
