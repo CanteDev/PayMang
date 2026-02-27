@@ -138,21 +138,66 @@ export async function POST(request: NextRequest) {
                 }
             }
 
-            // Fallback for Sale level transaction_id if nothing was refunded by individual payments
-            if (refundCount === 0 && sale.transaction_id && !sale.transaction_id.startsWith('TEST_')) {
-                try {
-                    let tid = sale.transaction_id;
-                    if (tid.startsWith('cs_')) {
-                        const sess = await stripe.checkout.sessions.retrieve(tid);
-                        tid = sess.payment_intent as string;
+            // Fallback: Use Stripe customer ID to find and refund all PIs for this sale
+            // This handles Test Clock payments where invoice.payment_intent is not exposed in API
+            if (refundCount === 0) {
+                const stripeCustomerId = sale.metadata?.customer;
+
+                if (stripeCustomerId) {
+                    console.log(`Attempting customer-level fallback refund for customer: ${stripeCustomerId}`);
+                    try {
+                        const charges = await stripe.charges.list({
+                            customer: stripeCustomerId,
+                            limit: 20,
+                        });
+
+                        // Filter to get only charges that are paid and not yet refunded
+                        const refundableCharges = charges.data.filter(
+                            ch => ch.status === 'succeeded' && !ch.refunded
+                        );
+
+                        console.log(`Found ${refundableCharges.length} refundable charges`);
+
+                        for (const charge of refundableCharges) {
+                            try {
+                                await stripe.refunds.create({ charge: charge.id });
+                                refundCount++;
+                                console.log(`Refunded charge: ${charge.id}`);
+                            } catch (err: any) {
+                                // Already refunded or error
+                                if (!err.message.includes('already been refunded')) {
+                                    refundErrors.push(`charge_${charge.id}: ${err.message}`);
+                                }
+                            }
+                        }
+                    } catch (err: any) {
+                        console.error(`Customer fallback refund error:`, err.message);
+                        refundErrors.push(`CustomerFallback: ${err.message}`);
                     }
-                    if (tid && (tid.startsWith('pi_') || tid.startsWith('ch_'))) {
-                        await stripe.refunds.create({ payment_intent: tid.startsWith('pi_') ? tid : undefined, charge: tid.startsWith('ch_') ? tid : undefined });
-                        refundCount++;
+                } else if (sale.transaction_id && !sale.transaction_id.startsWith('manual_') && !sale.transaction_id.startsWith('TEST_')) {
+                    // Last resort: try the sale-level transaction_id
+                    try {
+                        const ids = sale.transaction_id.split(',');
+                        for (const rawId of ids) {
+                            const tid = rawId.trim();
+                            if (tid.startsWith('pi_')) {
+                                await stripe.refunds.create({ payment_intent: tid });
+                                refundCount++;
+                            } else if (tid.startsWith('ch_')) {
+                                await stripe.refunds.create({ charge: tid });
+                                refundCount++;
+                            } else if (tid.startsWith('cs_')) {
+                                const sess = await stripe.checkout.sessions.retrieve(tid);
+                                if (sess.payment_intent) {
+                                    await stripe.refunds.create({ payment_intent: sess.payment_intent as string });
+                                    refundCount++;
+                                }
+                            }
+                        }
+                    } catch (err: any) {
+                        console.error(`Transaction ID fallback error:`, err.message);
+                        refundErrors.push(`TxFallback: ${err.message}`);
                     }
-                } catch (err: any) {
-                    console.error(`Fallback refund error:`, err.message);
-                    refundErrors.push(`Fallback: ${err.message}`);
                 }
             }
 
