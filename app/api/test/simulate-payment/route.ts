@@ -172,9 +172,21 @@ export async function POST(request: NextRequest) {
 
         // syncPaymentToInstallments → dispara el trigger que crea comisiones
         const { syncPaymentToInstallments } = await import('@/lib/payments-updater');
-        await syncPaymentToInstallments(supabase, link.student_id, sale.id, totalAmount, link.gateway || 'manual');
+        const updatedPayment = await syncPaymentToInstallments(supabase, link.student_id, sale.id, totalAmount, link.gateway || 'manual');
+
+        // Aplicar external_id a todos los registros para que se agrupen en la UI (estándar Stripe)
+        if (updatedPayment?.allIds && updatedPayment.allIds.length > 0) {
+            await supabase
+                .from('payments')
+                .update({
+                    external_id: sale.transaction_id,
+                    metadata: { simulated: true }
+                })
+                .in('id', updatedPayment.allIds);
+        }
 
         await supabase.from('payment_links').update({ status: 'paid' }).eq('id', linkId);
+
 
         console.log(`🧪 [SIM] Pago simulado procesado para venta ${sale.id}`);
         return NextResponse.json({

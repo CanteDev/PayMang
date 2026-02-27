@@ -119,8 +119,8 @@ async function handlePurchaseComplete(data: any) {
             'hotmart'
         );
 
-        // Guardar external_id en el payment para permitir reembolso individual futuro
-        if (updatedPayment?.id && transactionId) {
+        // Guardar external_id en todos los payment records afectados para permitir agrupar en UI y reembolso
+        if (updatedPayment?.allIds && updatedPayment.allIds.length > 0 && transactionId) {
             await (supabase.from('payments') as any)
                 .update({
                     external_id: transactionId,
@@ -129,7 +129,7 @@ async function handlePurchaseComplete(data: any) {
                         hotmart_recurrence_number: recurrenceNumber
                     }
                 })
-                .eq('id', updatedPayment.id);
+                .in('id', updatedPayment.allIds);
         }
 
         console.log(`✅ Hotmart cuota #${recurrenceNumber} para venta ${originalSale.id} procesada. Comisiones via trigger.`);
@@ -265,8 +265,8 @@ async function handlePurchaseComplete(data: any) {
         'hotmart'
     );
 
-    // Guardar external_id en el payment record para permitir reembolso individual
-    if (updatedPayment?.id && transactionId) {
+    // Guardar external_id en todos los payment records para permitir agrupar en la UI
+    if (updatedPayment?.allIds && updatedPayment.allIds.length > 0 && transactionId) {
         await (supabase.from('payments') as any)
             .update({
                 external_id: transactionId,
@@ -275,7 +275,7 @@ async function handlePurchaseComplete(data: any) {
                     hotmart_purchase_id: data.purchase?.id || null
                 }
             })
-            .eq('id', updatedPayment.id);
+            .in('id', updatedPayment.allIds);
     }
 
     // Actualizar estado del link
