@@ -53,7 +53,10 @@ export async function getDashboardMetrics(startDate?: string, endDate?: string) 
 
     const pendingPayouts = (commissionsData as any[])
         .filter(c => {
-            if (c.status === 'paid') return false;
+            // Only include commissions that are actually waiting to be paid
+            const isActionable = ['pending', 'validated', 'incidence'].includes(c.status);
+            if (!isActionable) return false;
+
             const cDate = new Date(c.created_at);
             return cDate >= start && cDate <= end;
         })
