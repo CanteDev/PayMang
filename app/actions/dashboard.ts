@@ -182,8 +182,11 @@ export async function getCommissionChartData(userId?: string) {
         const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
         const entry = chartData.find(d => d.sortKey === monthKey);
         if (entry) {
-            if (c.status === 'paid') entry.paid += Number(c.amount);
-            else entry.generated += Number(c.amount);
+            if (c.status === 'paid') {
+                entry.paid += Number(c.amount);
+            } else if (['pending', 'validated', 'incidence'].includes(c.status)) {
+                entry.generated += Number(c.amount);
+            }
         }
     });
 
