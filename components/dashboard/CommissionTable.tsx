@@ -106,6 +106,11 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
     const [totalCount, setTotalCount] = useState(0);
     const PAGE_SIZE = 20;
 
+    // Server-side totals (independent of pagination)
+    const [statsTotalAmount, setStatsTotalAmount] = useState(0);
+    const [statsPaidAmount, setStatsPaidAmount] = useState(0);
+    const [statsPendingAmount, setStatsPendingAmount] = useState(0);
+
     const supabase = createClient();
 
     // Reset page on filter change
@@ -124,7 +129,8 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
     // Load data on filter/page change
     useEffect(() => {
         loadCommissions();
-    }, [page, userRole, userId, statusFilter, agentFilter, selectedMonth]); // removed searchTerm from dependency to avoid loop if used internally, but kept for reset
+        loadTotals(); // always recalculate totals independently
+    }, [page, userRole, userId, statusFilter, agentFilter, selectedMonth]);
 
     // Fetch agents (Coaches) for management dialog and filter
     useEffect(() => {
@@ -197,6 +203,41 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
             toast.error('Error al cargar las comisiones');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Separate unpaginated query to get accurate totals for the current filters
+    const loadTotals = async () => {
+        try {
+            let query = supabase
+                .from('commissions')
+                .select('amount, status');
+
+            if (userRole !== 'admin' && userId) {
+                query = query.eq('agent_id', userId);
+            }
+            if (statusFilter !== 'all') {
+                query = query.eq('status', statusFilter);
+            }
+            if (userRole === 'admin' && agentFilter !== 'all') {
+                query = query.eq('agent_id', agentFilter);
+            }
+            if (selectedMonth !== 'all') {
+                const [year, month] = selectedMonth.split('-');
+                const startDate = new Date(parseInt(year), parseInt(month) - 1, 1).toISOString();
+                const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59).toISOString();
+                query = query.gte('created_at', startDate).lte('created_at', endDate);
+            }
+
+            const { data } = await query;
+            if (data) {
+                const all = data as { amount: number; status: string }[];
+                setStatsTotalAmount(all.reduce((s, c) => s + Number(c.amount), 0));
+                setStatsPaidAmount(all.filter(c => c.status === 'paid').reduce((s, c) => s + Number(c.amount), 0));
+                setStatsPendingAmount(all.filter(c => ['pending', 'validated', 'incidence'].includes(c.status)).reduce((s, c) => s + Number(c.amount), 0));
+            }
+        } catch (err) {
+            console.error('Error loading commission totals:', err);
         }
     };
 
@@ -339,17 +380,12 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
         );
     };
 
-    // Simplified for now as we use server-side filters for main fields
     const filteredCommissions = commissions;
 
-    // Calculate Totals
-    const totalAmount = filteredCommissions.reduce((sum, c) => sum + c.amount, 0);
-    const paidAmount = filteredCommissions
-        .filter(c => c.status === 'paid')
-        .reduce((sum, c) => sum + c.amount, 0);
-    const pendingAmount = filteredCommissions
-        .filter(c => ['pending', 'validated', 'incidence'].includes(c.status))
-        .reduce((sum, c) => sum + c.amount, 0);
+    // Stats now come from server-side totals (see loadTotals)
+    const totalAmount = statsTotalAmount;
+    const paidAmount = statsPaidAmount;
+    const pendingAmount = statsPendingAmount;
 
     // Generate last 12 months for filter
     const availableMonths = Array.from({ length: 12 }, (_, i) => {

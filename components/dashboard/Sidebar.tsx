@@ -13,7 +13,8 @@ import {
     TrendingUp,
     LogOut,
     Settings,
-    Package
+    Package,
+    Receipt
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
@@ -46,6 +47,7 @@ export default function Sidebar({ profile, companyName = 'PayMang' }: SidebarPro
                     { href: '/admin/students', label: 'Alumnos', icon: Users },
                     { href: '/admin/payments', label: 'Pagos', icon: DollarSign },
                     { href: '/admin/payslips', label: 'Comisiones', icon: FileText },
+                    { href: '/admin/liquidations', label: 'Liquidaciones', icon: Receipt },
                     { href: '/admin/expenses', label: 'Gastos', icon: TrendingUp },
                     { href: '/admin/settings', label: 'Configuración', icon: Settings },
                 ];
