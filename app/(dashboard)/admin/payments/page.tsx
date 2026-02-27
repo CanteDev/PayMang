@@ -50,71 +50,58 @@ export default function AdminPaymentsPage() {
             const from = (page - 1) * PAGE_SIZE;
             const to = from + PAGE_SIZE - 1;
 
-            if (gatewayFilter === 'manual') {
-                // Manual payments: read from payments table (installments marked as paid manually)
-                const { data, error, count } = await (supabase as any)
-                    .from('payments')
-                    .select(`
-                        id, amount, method, status, created_at, paid_at,
-                        student:students!student_id(full_name, email)
-                    `, { count: 'exact' })
-                    .eq('status', 'paid')
-                    .not('method', 'in', '("stripe","hotmart","sequra","klarna")')
-                    .order('paid_at', { ascending: false })
-                    .range(from, to);
-
-                if (error) throw error;
-                const mapped = (data || []).map((p: any) => ({
-                    id: p.id,
-                    amount: p.amount,
-                    gateway: p.method || 'manual',
-                    status: 'paid',
-                    created_at: p.paid_at || p.created_at,
-                    type: 'manual',
-                    student_name: p.student?.full_name,
-                    student_email: p.student?.email,
-                    pack_name: null,
-                }));
-                setSales(mapped);
-                setTotalCount(count || 0);
-            } else {
-                // Gateway sales: read only from sales table
-                let query = (supabase as any)
-                    .from('sales')
-                    .select(`
-                        id, total_amount, amount_collected, gateway, status, created_at, metadata,
-                        student:students!student_id(full_name, email),
+            // Base query on PAYMENTS table instead of SALES
+            // This ensures we see every individual installment/charge
+            let query = (supabase as any)
+                .from('payments')
+                .select(`
+                    id, 
+                    amount, 
+                    status, 
+                    created_at, 
+                    paid_at, 
+                    method,
+                    student:students!student_id(full_name, email),
+                    sale:sales!sale_id(
+                        id, 
+                        gateway, 
                         pack:packs!pack_id(name)
-                    `, { count: 'exact' })
-                    .order('created_at', { ascending: false });
+                    )
+                `, { count: 'exact' })
+                .eq('status', 'paid') // Only show confirmed received payments
+                .order('paid_at', { ascending: false });
 
-                if (gatewayFilter !== 'all') {
-                    query = query.eq('gateway', gatewayFilter);
-                }
-
-                // Hide 'pending' sales (pre-assigned packs) to avoid clutter in payments history
-                query = query.in('status', ['paid', 'refunded']);
-
-                query = query.range(from, to);
-                const { data, error, count } = await query;
-                if (error) throw error;
-
-                const mapped = (data || []).map((s: any) => ({
-                    id: s.id,
-                    amount: s.amount_collected || s.total_amount,
-                    gateway: s.gateway,
-                    status: s.status,
-                    created_at: s.created_at,
-                    type: 'sale',
-                    student_name: s.student?.full_name,
-                    student_email: s.student?.email,
-                    pack_name: s.pack?.name,
-                }));
-                setSales(mapped);
-                setTotalCount(count || 0);
+            // Apply filters
+            if (gatewayFilter === 'manual') {
+                // Filter by manual methods
+                query = query.not('method', 'in', '("stripe","hotmart","sequra","klarna")');
+            } else if (gatewayFilter !== 'all') {
+                // Filter by specific gateway
+                query = query.eq('method', gatewayFilter);
             }
+
+            query = query.range(from, to);
+
+            const { data, error, count } = await query;
+            if (error) throw error;
+
+            const mapped = (data || []).map((p: any) => ({
+                id: p.id,
+                amount: p.amount,
+                gateway: p.method || p.sale?.gateway || 'manual',
+                status: 'paid', // We filtered by paid
+                created_at: p.paid_at || p.created_at,
+                type: (p.method && !['stripe', 'hotmart', 'sequra'].includes(p.method)) ? 'manual' : 'sale',
+                student_name: p.student?.full_name,
+                student_email: p.student?.email,
+                pack_name: p.sale?.pack?.name,
+                sale_id: p.sale?.id
+            }));
+
+            setSales(mapped);
+            setTotalCount(count || 0);
         } catch (err: any) {
-            console.error('Error loading sales:', err);
+            console.error('Error loading payments:', err);
             setError(err.message || 'Error al cargar el historial de pagos');
         } finally {
             setLoading(false);
