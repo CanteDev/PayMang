@@ -18,6 +18,7 @@ interface Transaction {
     student_name?: string;
     student_email?: string;
     pack_name?: string;
+    sale_id?: string;
 }
 
 export default function AdminPaymentsPage() {
@@ -281,12 +282,12 @@ export default function AdminPaymentsPage() {
                                                     {Number(sale.amount || 0).toFixed(2)}€
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    {sale.type === 'sale' && (sale.status === 'completed' || sale.status === 'paid') && isRefundable(sale.created_at) && (
+                                                    {sale.type === 'sale' && (sale.status === 'completed' || sale.status === 'paid') && isRefundable(sale.created_at) && sale.sale_id && (
                                                         <button
-                                                            onClick={() => handleRefund(sale.id)}
+                                                            onClick={() => handleRefund(sale.sale_id!)}
                                                             className="text-xs text-red-600 hover:text-red-800 font-medium underline"
                                                         >
-                                                            Reembolsar
+                                                            Reembolsar Todo
                                                         </button>
                                                     )}
                                                     {sale.type === 'manual' && (
