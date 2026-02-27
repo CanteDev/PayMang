@@ -116,7 +116,12 @@ async function handleCheckoutCompleted(session: any) {
     }
 
     const { coach_id, closer_id, setter_id, target_sale_id } = link.metadata || {};
-    const totalAmount = link.pack.price;
+    const packPrice = link.pack.price;
+    const actualAmountPaid = (session.amount_total || 0) / 100;
+
+    if (actualAmountPaid <= 0) {
+        console.warn('Checkout session with zero amount:', session.id);
+    }
 
     // 2. Deduplication: Look for an existing pending sale for this student and pack
     let existingSale = null;
@@ -183,7 +188,7 @@ async function handleCheckoutCompleted(session: any) {
         const insertPayload = {
             student_id: studentId,
             pack_id: packId,
-            total_amount: totalAmount,
+            total_amount: packPrice,
             amount_collected: 0, // Will be updated by syncPaymentToInstallments
             gateway: 'stripe',
             transaction_id: session.id,
@@ -214,7 +219,7 @@ async function handleCheckoutCompleted(session: any) {
 
     // 2.5 Sincronizar cuotas del alumno (Restricted to THIS sale)
     // This also updates amount_collected automatically
-    await syncPaymentToInstallments(supabase, studentId, sale.id, totalAmount, 'stripe');
+    await syncPaymentToInstallments(supabase, studentId, sale.id, actualAmountPaid, 'stripe');
 
     // 3. Actualizar estado del link
     await supabase
@@ -225,7 +230,7 @@ async function handleCheckoutCompleted(session: any) {
     // 4. Crear comisiones automáticamente
     await createCommissions({
         saleId: sale.id,
-        totalAmount,
+        totalAmount: actualAmountPaid,
         coachId: coach_id,
         closerId: closer_id,
         setterId: setter_id,

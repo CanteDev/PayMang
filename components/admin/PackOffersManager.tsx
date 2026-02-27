@@ -34,9 +34,10 @@ interface PackOffersManagerProps {
     packId: string;
     packName: string;
     trigger?: React.ReactNode;
+    onSuccess?: () => void;
 }
 
-export default function PackOffersManager({ packId, packName, trigger }: PackOffersManagerProps) {
+export default function PackOffersManager({ packId, packName, trigger, onSuccess }: PackOffersManagerProps) {
     const [open, setOpen] = useState(false);
     const [offers, setOffers] = useState<PackOffer[]>([]);
     const [loadingOffers, setLoadingOffers] = useState(true);
@@ -194,6 +195,7 @@ export default function PackOffersManager({ packId, packName, trigger }: PackOff
                 toast.success('Oferta movida correctamente');
                 // Since it moved to another pack, we remove it from the current list
                 setOffers(prev => prev.filter(o => o.id !== offerId));
+                if (onSuccess) onSuccess();
             } else {
                 toast.error(result.error || 'Error al mover la oferta');
             }
