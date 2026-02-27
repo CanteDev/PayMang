@@ -130,12 +130,15 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
         apiVersion: '2026-01-28.clover', // Keep consistent
     });
 
+    // Sincronizar nombre del cliente antes de crear la sesión
+    const stripeCustomerId = await getOrCreateStripeCustomer(stripe, student);
+
     try {
         const sessionConfig: Stripe.Checkout.SessionCreateParams = {
             payment_method_types: ['card'],
             success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${origin}/cancel`,
-            customer_email: student.email,
+            customer: stripeCustomerId, // Use customer ID instead of customer_email
             metadata: {
                 link_id: metadata.link_id,
                 student_id: student.id,
@@ -181,6 +184,46 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
     } catch (error) {
         console.error('Stripe Session Creation Failed:', error);
         throw error;
+    }
+}
+
+async function getOrCreateStripeCustomer(stripe: Stripe, student: any): Promise<string> {
+    try {
+        // 1. Buscar por email
+        const customers = await stripe.customers.list({
+            email: student.email,
+            limit: 1
+        });
+
+        if (customers.data.length > 0) {
+            const customer = customers.data[0];
+
+            // 2. Si el nombre es diferente, actualizarlo (evita el "blabla")
+            if (customer.name !== student.full_name) {
+                console.log(`Updating Stripe customer name for ${student.email}: ${customer.name} -> ${student.full_name}`);
+                await stripe.customers.update(customer.id, {
+                    name: student.full_name
+                });
+            }
+            return customer.id;
+        }
+
+        // 3. Si no existe, crearlo
+        console.log(`Creating new Stripe customer for ${student.email} with name ${student.full_name}`);
+        const newCustomer = await stripe.customers.create({
+            email: student.email,
+            name: student.full_name,
+            metadata: {
+                paymang_student_id: student.id
+            }
+        });
+
+        return newCustomer.id;
+    } catch (err) {
+        console.error('Error in getOrCreateStripeCustomer:', err);
+        // Fallback: if this fails, we can either throw or try to continue with session creation using email
+        // but since we want consistency, throwing is safer to investigate errors.
+        throw err;
     }
 }
 
