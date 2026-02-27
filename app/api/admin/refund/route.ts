@@ -254,19 +254,47 @@ export async function POST(request: NextRequest) {
                     .update({ status: 'refunded' })
                     .eq('id', paymentId);
 
-                // Update sale amount_collected (reduce by refunded amount)
+                // Fetch the refunded payment to get amount and determine milestone
                 const { data: refundedPayment } = await supabase
                     .from('payments')
-                    .select('amount')
+                    .select('amount, due_date')
                     .eq('id', paymentId)
                     .single();
 
                 if (refundedPayment) {
+                    // Update sale amount_collected (reduce by refunded amount)
                     const newCollected = Math.max(0, Number(sale.amount_collected || 0) - Number(refundedPayment.amount));
                     await supabase
                         .from('sales')
                         .update({ amount_collected: newCollected })
                         .eq('id', saleId);
+
+                    // Determine which milestone this payment corresponds to
+                    // (its chronological position among all installments of the sale)
+                    const { data: allInstallments } = await supabase
+                        .from('payments')
+                        .select('id, due_date')
+                        .eq('sale_id', saleId)
+                        .in('status', ['paid', 'refunded'])
+                        .order('due_date', { ascending: true });
+
+                    const milestone = allInstallments
+                        ? allInstallments.findIndex((p: any) => p.id === paymentId) + 1
+                        : null;
+
+                    // Cancel commissions for this milestone
+                    if (milestone && milestone > 0) {
+                        await supabase
+                            .from('commissions')
+                            .update({
+                                status: 'cancelled',
+                                incidence_note: `Cuota nº${milestone} reembolsada por Admin`
+                            })
+                            .eq('sale_id', saleId)
+                            .eq('milestone', milestone)
+                            .neq('status', 'paid'); // Never cancel already-paid commissions
+                        console.log(`Cancelled commissions for sale ${saleId}, milestone ${milestone}`);
+                    }
                 }
 
                 return NextResponse.json({ success: true, message: `Pago reembolsado correctamente` });
