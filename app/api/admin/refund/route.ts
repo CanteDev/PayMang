@@ -9,8 +9,9 @@ async function getStripeClient() {
     const config = await getGatewayConfig('stripe');
     const apiKey = config.secret_key || config.SECRET_KEY;
     if (!apiKey) throw new Error('Stripe API Key not configured in settings');
-    return new Stripe(apiKey);
+    return new Stripe(apiKey, { apiVersion: '2023-10-16' as any });
 }
+
 
 // Helper to get Supabase Admin Client
 function getSupabaseAdmin() {
@@ -258,14 +259,20 @@ export async function POST(request: NextRequest) {
                 }
             }
 
-            if (refundCount === 0 && refundErrors.length > 0) {
+            if (refundErrors.length > 0 && refundCount === 0) {
+                const errorMsg = refundErrors.join(' | ');
                 return NextResponse.json({
-                    error: 'No se pudo procesar ningún reembolso en Stripe.',
-                    details: refundErrors
+                    error: `Error en Stripe: ${errorMsg}`
                 }, { status: 400 });
             }
 
+            if (refundCount === 0) {
+                return NextResponse.json({
+                    error: 'No se encontraron cargos reembolsables en Stripe para este pago.'
+                }, { status: 400 });
+            }
         } else if (effectiveGateway === 'hotmart') {
+
             if (isIndividual) {
                 return NextResponse.json({ error: 'El reembolso individual no está disponible para Hotmart' }, { status: 400 });
             }
