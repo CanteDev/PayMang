@@ -37,7 +37,7 @@ async function refundStripeRecord(stripe: Stripe, record: any): Promise<boolean>
     }
 
     if (!idToRefund) {
-        console.warn(`Payment ${record.id} has no external_id or usable metadata`);
+        console.warn(`Payment ${record.id} has no external_id or usable metadata — skipping`);
         return false;
     }
 
@@ -71,6 +71,7 @@ async function refundStripeRecord(stripe: Stripe, record: any): Promise<boolean>
 
     if (idToRefund.startsWith('in_')) {
         const inv = await stripe.invoices.retrieve(idToRefund) as any;
+        // Direct fields (works for real payments)
         if (inv.payment_intent) {
             await stripe.refunds.create({ payment_intent: inv.payment_intent as string });
             return true;
@@ -79,7 +80,21 @@ async function refundStripeRecord(stripe: Stripe, record: any): Promise<boolean>
             await stripe.refunds.create({ charge: inv.charge as string });
             return true;
         }
-        throw new Error('La factura no tiene un cargo asociado para reembolsar');
+        // Fallback for Test Clock invoices: search charges for this customer filtered by invoice ID
+        // Charges always have the `invoice` field populated, even for Test Clock payments
+        const stripeCustomerId = (inv as any).customer;
+        const chargesForInvoice = await stripe.charges.list({
+            limit: 20,
+            ...(stripeCustomerId ? { customer: stripeCustomerId } : {})
+        });
+        const matchingCharge = chargesForInvoice.data.find(
+            (ch: any) => ch.invoice === idToRefund && ch.status === 'succeeded' && !ch.refunded
+        );
+        if (matchingCharge) {
+            await stripe.refunds.create({ charge: matchingCharge.id });
+            return true;
+        }
+        throw new Error('La factura no tiene un cargo reembolsable asociado');
     }
 
     console.warn(`Unknown Stripe ID format: ${idToRefund}`);
@@ -108,8 +123,24 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Sale not found' }, { status: 404 });
         }
 
-        if (sale.status === 'refunded') {
-            return NextResponse.json({ error: 'Sale is already refunded' }, { status: 400 });
+        const isIndividual = !!paymentId;
+
+        // For individual payment refunds: check if the specific payment is already refunded
+        // For full-sale refunds: check if the whole sale is already refunded
+        if (isIndividual) {
+            const { data: paymentCheck } = await supabase
+                .from('payments')
+                .select('status')
+                .eq('id', paymentId)
+                .single();
+
+            if (paymentCheck?.status === 'refunded') {
+                return NextResponse.json({ error: 'Este pago ya ha sido reembolsado' }, { status: 400 });
+            }
+        } else {
+            if (sale.status === 'refunded') {
+                return NextResponse.json({ error: 'La venta ya está reembolsada' }, { status: 400 });
+            }
         }
 
         // Validate 14-day refund window
@@ -121,7 +152,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Refund period expired (14 days)' }, { status: 400 });
         }
 
-        const isIndividual = !!paymentId; // true = refund one payment, false = refund all
         console.log(`Processing ${isIndividual ? 'individual payment' : 'full sale'} refund (Gateway: ${sale.gateway})`);
 
         let refundCount = 0;
