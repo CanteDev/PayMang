@@ -40,9 +40,7 @@ export async function POST(request: NextRequest) {
 
     if (webhookSecret && config.secret_key) {
         try {
-            const stripe = new Stripe(config.secret_key, {
-                apiVersion: '2026-01-28.clover',
-            });
+            const stripe = new Stripe(config.secret_key);
             event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
             console.log('✅ Webhook de Stripe verificado correctamente');
         } catch (err: any) {

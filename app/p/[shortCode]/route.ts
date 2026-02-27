@@ -126,19 +126,26 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
         return url.toString();
     }
 
-    const stripe = new Stripe(secretKey, {
-        apiVersion: '2026-01-28.clover', // Keep consistent
-    });
+    const stripe = new Stripe(secretKey);
 
     // Sincronizar nombre del cliente antes de crear la sesión
-    const stripeCustomerId = await getOrCreateStripeCustomer(stripe, student);
+    // Usamos try/catch y validación para evitar que errores aquí bloqueen el pago
+    let stripeCustomerId: string | undefined = undefined;
+    try {
+        if (student.email && student.email.includes('@') && student.email.includes('.')) {
+            stripeCustomerId = await getOrCreateStripeCustomer(stripe, student);
+        }
+    } catch (err) {
+        console.error('Error synchronizing Stripe customer, falling back to email:', err);
+    }
 
     try {
         const sessionConfig: Stripe.Checkout.SessionCreateParams = {
             payment_method_types: ['card'],
             success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${origin}/cancel`,
-            customer: stripeCustomerId, // Use customer ID instead of customer_email
+            // Use customer ID if available, otherwise fallback to email
+            ...(stripeCustomerId ? { customer: stripeCustomerId } : { customer_email: student.email }),
             metadata: {
                 link_id: metadata.link_id,
                 student_id: student.id,
