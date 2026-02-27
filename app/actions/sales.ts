@@ -71,6 +71,7 @@ export async function createSaleAction(studentId: string, salePayload: any) {
 
                 if (paymentsError) {
                     console.error('Failed to create installments:', paymentsError);
+                    return { success: false, error: 'Venta creada pero falló la generación de cuotas: ' + paymentsError.message };
                 }
             }
         }
@@ -195,6 +196,54 @@ export async function updateSaleAction(saleId: string, payload: any) {
         return { success: true, data: updatedSale };
     } catch (e: any) {
         console.error('updateSaleAction error:', e);
+        return { success: false, error: e.message || 'An unexpected error occurred' };
+    }
+}
+
+/**
+ * Deletes a sale, its pending installments, and associated commissions.
+ * It does NOT delete successful payments or gateway webhooks.
+ */
+export async function deleteSaleAction(saleId: string) {
+    const supabase = await createClient();
+
+    try {
+        // Find sale
+        const { data: sale, error: saleError } = await (supabase as any)
+            .from('sales')
+            .select('student_id')
+            .eq('id', saleId)
+            .single();
+
+        if (saleError || !sale) {
+            return { success: false, error: 'Sale not found' };
+        }
+
+        // Delete pending payments associated with this sale
+        const { error: paymentsError } = await (supabase as any)
+            .from('payments')
+            .delete()
+            .eq('sale_id', saleId)
+            .eq('status', 'pending');
+
+        if (paymentsError) {
+            console.error('Failed to delete pending installments:', paymentsError);
+        }
+
+        // Delete the sale itself
+        const { error: deleteError } = await (supabase as any)
+            .from('sales')
+            .delete()
+            .eq('id', saleId);
+
+        if (deleteError) {
+            return { success: false, error: 'Failed to delete sale record' };
+        }
+
+        revalidatePath('/admin/students');
+        return { success: true };
+    } catch (e: any) {
+        console.error('deleteSaleAction error:', e);
         return { success: false, error: e.message || 'An unexpected error occurred' };
     }
 }

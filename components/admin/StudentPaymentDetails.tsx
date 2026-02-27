@@ -176,6 +176,8 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
         try {
             const res = await createSaleAction(student.id, {
                 pack_id: salePackId,
+                gateway: 'manual',
+                transaction_id: `manual_${Date.now()}`,
                 agreed_price: salePrice,
                 payment_method: saleMethod,
                 total_installments: saleMethod === 'installments' ? saleInstallments : 1,
@@ -532,8 +534,28 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                                                 variant="ghost"
                                                 className="h-8 w-8 p-0"
                                                 onClick={() => startEditingSale(sale)}
+                                                title="Editar / Reestructurar Pack"
                                             >
-                                                <Edit2 className="w-4 h-4 text-gray-500" />
+                                                <Edit2 className="w-4 h-4 text-gray-500 hover:text-blue-600" />
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-8 w-8 p-0"
+                                                onClick={async () => {
+                                                    if (confirm('¿Estás seguro de que deseas ELIMINAR este pack y todas sus cuotas pendientes?')) {
+                                                        const { deleteSaleAction } = await import('@/app/actions/sales');
+                                                        const res = await deleteSaleAction(sale.id);
+                                                        if (res.success) {
+                                                            loadData();
+                                                        } else {
+                                                            alert('Error al eliminar el pack: ' + res.error);
+                                                        }
+                                                    }
+                                                }}
+                                                title="Eliminar Pack"
+                                            >
+                                                <X className="w-4 h-4 text-gray-500 hover:text-red-600" />
                                             </Button>
                                         </div>
                                     </div>

@@ -199,6 +199,8 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                 // Crear nuevo estudiante y Venta inicial usando la nueva acción
                 const salePayload = packId ? {
                     pack_id: packId,
+                    gateway: 'manual',
+                    transaction_id: `manual_${Date.now()}`,
                     payment_method: paymentMethod,
                     total_installments: paymentMethod === 'installments' ? Number(totalInstallments) : 1,
                     installment_period: paymentMethod === 'installments' ? Number(installmentPeriod) : 1,
