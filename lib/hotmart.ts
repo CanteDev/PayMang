@@ -15,6 +15,7 @@ export class HotmartClient {
     private static instance: HotmartClient;
     private accessToken: string | null = null;
     private tokenExpiration: number = 0;
+    private credentialsFingerprint: string | null = null; // Detects credential changes
 
     private constructor() { }
 
@@ -30,13 +31,10 @@ export class HotmartClient {
      */
     private async getAccessToken(): Promise<string> {
         const now = Date.now();
-        if (this.accessToken && this.tokenExpiration > now) {
-            return this.accessToken;
-        }
 
         try {
             const config = await getAppConfig('hotmart_config');
-            console.log("DB HOTMART CONFIG: ", JSON.stringify(config));
+            console.log("DB HOTMART CONFIG keys:", Object.keys(config || {}));
 
             // Prioritize Basic Auth if available (as provided by user)
             // Otherwise construct from Client ID + Secret
@@ -56,6 +54,19 @@ export class HotmartClient {
 
             if (!authHeader) {
                 throw new Error('Hotmart credentials not configured (Missing Basic Auth or Client ID/Secret)');
+            }
+
+            // Invalidate token if credentials have changed since last token was obtained
+            if (this.credentialsFingerprint !== authHeader) {
+                console.log('Hotmart credentials changed — forcing token refresh');
+                this.accessToken = null;
+                this.tokenExpiration = 0;
+                this.credentialsFingerprint = authHeader;
+            }
+
+            // Return cached token if still valid
+            if (this.accessToken && this.tokenExpiration > now) {
+                return this.accessToken;
             }
 
             const authUrl = 'https://api-sec-vlc.hotmart.com/security/oauth/token';
