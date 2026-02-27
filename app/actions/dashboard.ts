@@ -182,14 +182,22 @@ export async function getCommissionChartData(userId?: string) {
     const { data: commissions } = await commQuery;
 
     // 2. Get Planned Payments (Future & Current)
+    // Exclude payments from students with non-billable statuses (defaulted, finished, inactive)
     let payQuery = supabase
         .from('payments')
-        .select('amount, due_date')
+        .select('amount, due_date, sale:sales!inner(student:students!inner(status))')
         .in('status', ['pending', 'overdue'])
         .gte('due_date', startWindow)
         .lte('due_date', endWindow);
 
-    const { data: plannedPayments } = await payQuery;
+    const { data: plannedPaymentsRaw } = await payQuery;
+
+    // Filter out payments from students that are not actively paying
+    const EXCLUDED_STUDENT_STATUSES = ['defaulted', 'finished', 'inactive'];
+    const plannedPayments = (plannedPaymentsRaw as any[] || []).filter(p => {
+        const studentStatus = (p as any).sale?.student?.status;
+        return !EXCLUDED_STUDENT_STATUSES.includes(studentStatus);
+    });
 
     // Process commissions
     (commissions as any[] || []).forEach(c => {
@@ -302,12 +310,19 @@ export async function getAlertCounts() {
             .select('*', { count: 'exact', head: true })
             .eq('status', 'incidence');
 
-        // Count Overdue Payments
+        // Count Overdue Payments - exclude non-active students
         const today = new Date().toISOString().split('T')[0];
-        const { count: overdueCount } = await (supabase
-            .from('payments') as any) // Use any if payments not yet in types fully
-            .select('*', { count: 'exact', head: true })
+        const { data: overdueData } = await (supabase
+            .from('payments') as any)
+            .select('id, sale:sales!inner(student:students!inner(status))')
             .or(`status.eq.overdue,and(status.eq.pending,due_date.lt.${today})`);
+
+        // Only count payments from active/paused students
+        const EXCLUDED_STATUSES = ['defaulted', 'finished', 'inactive'];
+        const overdueCount = (overdueData || []).filter((p: any) => {
+            const studentStatus = p.sale?.student?.status;
+            return !EXCLUDED_STATUSES.includes(studentStatus);
+        }).length;
 
         results.pendingPayouts = validatedCount || 0;
         results.newIncidences = incidenceCount || 0;
