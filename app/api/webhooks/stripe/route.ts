@@ -312,14 +312,24 @@ async function handleInvoicePaid(invoice: any) {
     const updatedPayment = await syncPaymentToInstallments(supabase, originalSale.student_id, originalSale.id, amountPaid, 'stripe');
 
     // Persist the Charge/PaymentIntent from the invoice for refunds
+    // Note: invoice.charge comes from the raw webhook payload (not from API retrieve)
     if (updatedPayment?.id) {
+        const chargeId = invoice.charge;       // Raw payload has charge ID
+        const piId = invoice.payment_intent;   // Might be null in Test Clock
+
         await supabase
             .from('payments')
             .update({
-                external_id: invoice.charge || invoice.payment_intent,
-                metadata: { stripe_invoice_id: invoice.id }
+                external_id: chargeId || piId || null,
+                metadata: {
+                    stripe_invoice_id: invoice.id,
+                    stripe_charge_id: chargeId || null,
+                    stripe_payment_intent: piId || null,
+                }
             })
             .eq('id', updatedPayment.id);
+
+        console.log(`Saved charge ${chargeId} and PI ${piId} for payment ${updatedPayment.id}`);
     }
 
 

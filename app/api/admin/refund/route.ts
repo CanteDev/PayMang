@@ -146,9 +146,14 @@ export async function POST(request: NextRequest) {
                 if (stripeCustomerId) {
                     console.log(`Attempting customer-level fallback refund for customer: ${stripeCustomerId}`);
                     try {
+                        // Only list charges created since this sale was created (safety filter)
+                        // This prevents accidentally refunding charges from other sales of the same customer
+                        const saleCreatedTimestamp = Math.floor(new Date(sale.created_at).getTime() / 1000);
+
                         const charges = await stripe.charges.list({
                             customer: stripeCustomerId,
                             limit: 20,
+                            created: { gte: saleCreatedTimestamp },
                         });
 
                         // Filter to get only charges that are paid and not yet refunded
