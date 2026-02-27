@@ -26,6 +26,14 @@ export default function AdminPaymentsPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [gatewayFilter, setGatewayFilter] = useState('all');
+
+    // Date Filters
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    const [startDate, setStartDate] = useState(firstDay);
+    const [endDate, setEndDate] = useState(lastDay);
+
     const [error, setError] = useState<string | null>(null);
 
     // Pagination State
@@ -38,12 +46,12 @@ export default function AdminPaymentsPage() {
     // Reset page on filter change
     useEffect(() => {
         setPage(1);
-    }, [gatewayFilter, searchTerm]);
+    }, [gatewayFilter, searchTerm, startDate, endDate]);
 
     // Load data
     useEffect(() => {
         loadSales();
-    }, [page, gatewayFilter]);
+    }, [page, gatewayFilter, startDate, endDate]);
 
     const loadSales = async () => {
         setLoading(true);
@@ -80,6 +88,10 @@ export default function AdminPaymentsPage() {
                 // Filter by specific gateway
                 query = query.eq('method', gatewayFilter);
             }
+
+            // Apply date filters
+            if (startDate) query = query.gte('paid_at', startDate);
+            if (endDate) query = query.lte('paid_at', endDate);
 
             query = query.range(from, to);
 
@@ -240,6 +252,25 @@ export default function AdminPaymentsPage() {
                                 <option value="sequra">SeQura</option>
                                 <option value="manual">Manual</option>
                             </select>
+                        </div>
+
+                        <div className="flex flex-col md:flex-row items-center gap-2">
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Periodo:</span>
+                            <div className="flex items-center space-x-2">
+                                <Input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    className="h-10 text-sm"
+                                />
+                                <span className="text-gray-400">→</span>
+                                <Input
+                                    type="date"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className="h-10 text-sm"
+                                />
+                            </div>
                         </div>
                     </div>
 
