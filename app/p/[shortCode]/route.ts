@@ -69,6 +69,7 @@ export async function GET(
             link.offer,
             {
                 link_id: link.id,
+                created_by: link.created_by,
                 coach_id: link.metadata?.coach_id || link.created_by || null,
                 closer_id: link.metadata?.closer_id || null,
                 setter_id: link.metadata?.setter_id || null,
@@ -86,9 +87,12 @@ export async function GET(
 
     } catch (error) {
         console.error('Error en smart redirect:', error);
-        return NextResponse.redirect(`${CONFIG.APP.URL}/error?message=internal_server_error`);
+        // Usar origin dinámico para evitar redirecciones a dominios de previsualización protegidos
+        const errorOrigin = request.nextUrl.origin || CONFIG.APP.URL;
+        return NextResponse.redirect(`${errorOrigin}/error?message=internal_server_error`);
     }
 }
+
 
 async function buildPaymentUrl(
     gateway: string,
@@ -153,19 +157,20 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
             // Use customer ID if available, otherwise fallback to email
             ...(stripeCustomerId ? { customer: stripeCustomerId } : { customer_email: student.email }),
             metadata: {
-                link_id: metadata.link_id,
-                student_id: student.id,
-                pack_id: pack.id,
-                agent_id: metadata.created_by,
-                coach_id: metadata.coach_id || metadata.metadata?.coach_id || null,
-                closer_id: metadata.closer_id || metadata.metadata?.closer_id || null,
-                setter_id: metadata.setter_id || metadata.metadata?.setter_id || null,
+                link_id: String(metadata.link_id),
+                student_id: String(student.id),
+                pack_id: String(pack.id),
+                agent_id: String(metadata.created_by || ''),
+                coach_id: String(metadata.coach_id || metadata.metadata?.coach_id || ''),
+                closer_id: String(metadata.closer_id || metadata.metadata?.closer_id || ''),
+                setter_id: String(metadata.setter_id || metadata.metadata?.setter_id || ''),
                 source: 'paymang_link',
-                offer_id: offer ? offer.id : null
+                offer_id: offer ? String(offer.id) : ''
             },
             mode: 'payment',
             line_items: []
         };
+
 
         if (offer && offer.gateway === 'stripe' && offer.external_id && offer.external_id.startsWith('price_')) {
             const stripePrice = await stripe.prices.retrieve(offer.external_id);
