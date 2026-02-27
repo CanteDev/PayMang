@@ -44,12 +44,32 @@ async function refundStripeRecord(stripe: Stripe, record: any): Promise<boolean>
     console.log(`Refunding Stripe ID: ${idToRefund} (Payment ${record.id})`);
 
     if (idToRefund.startsWith('cs_')) {
-        const session = await stripe.checkout.sessions.retrieve(idToRefund);
+        const session = await stripe.checkout.sessions.retrieve(idToRefund) as any;
         let pi = session.payment_intent as string;
 
+        // For subscription checkouts, payment_intent may be null — use invoice
         if (!pi && session.invoice) {
             const inv = await stripe.invoices.retrieve(session.invoice as string) as any;
             pi = inv.payment_intent as string;
+        }
+
+        // Third fallback: subscription → list invoices chronologically → first invoice PI
+        if (!pi && session.subscription) {
+            const invoices = await stripe.invoices.list({
+                subscription: session.subscription as string,
+                limit: 100
+            });
+            // Find oldest invoice (first payment) that has a payment_intent
+            const sortedInvoices = invoices.data.sort(
+                (a: any, b: any) => a.created - b.created
+            );
+            for (const inv of sortedInvoices) {
+                if ((inv as any).payment_intent) {
+                    pi = (inv as any).payment_intent as string;
+                    console.log(`Found PI via subscription invoice: ${pi}`);
+                    break;
+                }
+            }
         }
 
         if (pi) {
@@ -282,18 +302,19 @@ export async function POST(request: NextRequest) {
                         ? allInstallments.findIndex((p: any) => p.id === paymentId) + 1
                         : null;
 
-                    // Cancel commissions for this milestone
-                    if (milestone && milestone > 0) {
-                        await supabase
-                            .from('commissions')
-                            .update({
-                                status: 'cancelled',
-                                incidence_note: `Cuota nº${milestone} reembolsada por Admin`
-                            })
-                            .eq('sale_id', saleId)
-                            .eq('milestone', milestone)
-                            .neq('status', 'paid'); // Never cancel already-paid commissions
-                        console.log(`Cancelled commissions for sale ${saleId}, milestone ${milestone}`);
+                    // Cancel commissions for this specific payment (by payment_id — precise)
+                    const { error: commCancelError } = await supabase
+                        .from('commissions')
+                        .update({
+                            status: 'cancelled',
+                            incidence_note: `Pago reembolsado por Admin`
+                        })
+                        .eq('payment_id', paymentId)
+                        .neq('status', 'paid'); // Never cancel already-paid commissions
+                    if (commCancelError) {
+                        console.error(`Error cancelling commissions for payment ${paymentId}:`, commCancelError);
+                    } else {
+                        console.log(`Cancelled commissions for payment ${paymentId}`);
                     }
                 }
 
