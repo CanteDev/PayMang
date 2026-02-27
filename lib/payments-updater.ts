@@ -26,8 +26,7 @@ export async function syncGatewayPaymentToInstallments(
         .order('due_date', { ascending: true });
 
     if (fetchError || !pendingPayments || pendingPayments.length === 0) {
-        console.warn(`No pending payments found for student ${studentId} to cover ${amountReceived} from ${gateway}`);
-        return;
+        console.warn(`No pending payments found for student ${studentId} to cover ${amountReceived} from ${gateway}. Will create standalone history record.`);
     }
 
     let remainingToCover = amountReceived;
