@@ -29,8 +29,17 @@ export default function AdminPaymentsPage() {
 
     // Date Filters
     const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    // Helper para obtener YYYY-MM-DD en hora local sin desfase de zona horaria
+    const toLocalDateString = (date: Date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const firstDay = toLocalDateString(new Date(now.getFullYear(), now.getMonth(), 1));
+    const lastDay = toLocalDateString(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+
     const [startDate, setStartDate] = useState(firstDay);
     const [endDate, setEndDate] = useState(lastDay);
 
