@@ -63,11 +63,17 @@ export async function GET(
         // 3. Construir URL de pago según la pasarela
         const origin = request.nextUrl.origin;
         const paymentUrl = await buildPaymentUrl(
-            link.gateway || 'stripe', // Default to Stripe
+            link.gateway || 'stripe',
             link.student,
             link.pack,
             link.offer,
-            { link_id: link.id, coach_id: link.created_by, metadata: link.metadata },
+            {
+                link_id: link.id,
+                coach_id: link.metadata?.coach_id || link.created_by || null,
+                closer_id: link.metadata?.closer_id || null,
+                setter_id: link.metadata?.setter_id || null,
+                metadata: link.metadata
+            },
             origin
         );
 
@@ -150,8 +156,10 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
                 link_id: metadata.link_id,
                 student_id: student.id,
                 pack_id: pack.id,
-                agent_id: metadata.created_by, // Assuming similar to coach_id
-                coach_id: metadata.coach_id,
+                agent_id: metadata.created_by,
+                coach_id: metadata.coach_id || metadata.metadata?.coach_id || null,
+                closer_id: metadata.closer_id || metadata.metadata?.closer_id || null,
+                setter_id: metadata.setter_id || metadata.metadata?.setter_id || null,
                 source: 'paymang_link',
                 offer_id: offer ? offer.id : null
             },
