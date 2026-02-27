@@ -61,6 +61,9 @@ export async function POST(request: NextRequest) {
 
         console.log(`Processing refund for sale ${saleId} (Gateway: ${sale.gateway})`);
 
+        let refundCount = 0;
+        let refundErrors: string[] = [];
+
         // 2. Process Refund based on Gateway
         if (sale.gateway === 'stripe') {
             const stripe = await getStripeClient();
@@ -71,9 +74,6 @@ export async function POST(request: NextRequest) {
                 .select('*')
                 .eq('sale_id', saleId)
                 .eq('status', 'paid');
-
-            let refundCount = 0;
-            let refundErrors: string[] = [];
 
             if (paidRecords && paidRecords.length > 0) {
                 console.log(`Found ${paidRecords.length} paid installments to attempt refund`);
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
                             refundCount++;
                         } else if (idToRefund.startsWith('in_')) {
                             // Invoices are not directly refundable, we need the PI of the invoice
-                            const inv = await stripe.invoices.retrieve(idToRefund);
+                            const inv = await stripe.invoices.retrieve(idToRefund) as any;
                             if (inv.payment_intent) {
                                 await stripe.refunds.create({ payment_intent: inv.payment_intent as string });
                                 refundCount++;
