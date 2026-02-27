@@ -139,14 +139,16 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
     const stripe = new Stripe(secretKey);
 
     // Sincronizar nombre del cliente antes de crear la sesión
-    // Usamos try/catch y validación para evitar que errores aquí bloqueen el pago
+    // Usamos validación estricta para evitar errores de Stripe por emails malformados (ej: al2@mxi)
+    const isValidEmail = !!(student.email && student.email.includes('@') && student.email.includes('.'));
     let stripeCustomerId: string | undefined = undefined;
+
     try {
-        if (student.email && student.email.includes('@') && student.email.includes('.')) {
+        if (isValidEmail) {
             stripeCustomerId = await getOrCreateStripeCustomer(stripe, student);
         }
     } catch (err) {
-        console.error('Error synchronizing Stripe customer, falling back to email:', err);
+        console.error('Error synchronizing Stripe customer, falling back to email field:', err);
     }
 
     try {
@@ -154,9 +156,13 @@ async function buildStripeUrl(student: any, pack: any, offer: any, metadata: any
             payment_method_types: ['card'],
             success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${origin}/cancel`,
-            // Use customer ID if available, otherwise fallback to email
-            ...(stripeCustomerId ? { customer: stripeCustomerId } : { customer_email: student.email }),
+            // Use customer ID if available, or email if valid, otherwise let Stripe prompt for it
+            ...(stripeCustomerId
+                ? { customer: stripeCustomerId }
+                : (isValidEmail ? { customer_email: student.email } : {})
+            ),
             metadata: {
+
                 link_id: String(metadata.link_id),
                 student_id: String(student.id),
                 pack_id: String(pack.id),
