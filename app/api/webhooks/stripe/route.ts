@@ -5,7 +5,7 @@ import { CONFIG } from '@/config/app.config';
 import { calculateCommission } from '@/lib/commissions/calculator';
 import Stripe from 'stripe';
 import { getGatewayConfig } from '@/lib/settings-helper';
-import { syncGatewayPaymentToInstallments } from '@/lib/payments-updater';
+import { syncPaymentToInstallments } from '@/lib/payments-updater';
 
 /**
  * Helper to get Service Role Client
@@ -148,16 +148,16 @@ async function handleCheckoutCompleted(session: any) {
     if (existingSale) {
         console.log(`Found existing pending sale ${existingSale.id}. Updating it.`);
 
-        const newAmountCollected = Number(existingSale.amount_collected || 0) + Number(totalAmount);
         const newTransactionId = existingSale.transaction_id
             ? `${existingSale.transaction_id},${session.id}`
             : session.id;
 
         const updatePayload = {
-            amount_collected: newAmountCollected,
             gateway: 'stripe',
             transaction_id: newTransactionId,
             status: 'paid',
+
+
             metadata: {
                 ...existingSale.metadata,
                 payment_intent: session.payment_intent,
@@ -184,7 +184,7 @@ async function handleCheckoutCompleted(session: any) {
             student_id: studentId,
             pack_id: packId,
             total_amount: totalAmount,
-            amount_collected: totalAmount, // Stripe is full payment
+            amount_collected: 0, // Will be updated by syncPaymentToInstallments
             gateway: 'stripe',
             transaction_id: session.id,
             status: 'paid',
@@ -213,7 +213,8 @@ async function handleCheckoutCompleted(session: any) {
     }
 
     // 2.5 Sincronizar cuotas del alumno (Restricted to THIS sale)
-    await syncGatewayPaymentToInstallments(supabase, studentId, sale.id, totalAmount, 'stripe');
+    // This also updates amount_collected automatically
+    await syncPaymentToInstallments(supabase, studentId, sale.id, totalAmount, 'stripe');
 
     // 3. Actualizar estado del link
     await supabase
@@ -282,15 +283,9 @@ async function handleInvoicePaid(invoice: any) {
         ? (prevCommissions[0].milestone + 1)
         : 2;
 
-    // 3. Sumar al amount_collected original
-    const newCollected = Number(originalSale.amount_collected || 0) + amountPaid;
-    await supabase
-        .from('sales')
-        .update({
-            amount_collected: newCollected,
-            updated_at: new Date().toISOString()
-        } as any)
-        .eq('id', originalSale.id);
+    // 3. syncPaymentToInstallments handles amount_collected and installments
+    await syncPaymentToInstallments(supabase, originalSale.student_id, originalSale.id, amountPaid, 'stripe');
+
 
     // 4. Crear comisiones para esta nueva cuota
     await createCommissions({

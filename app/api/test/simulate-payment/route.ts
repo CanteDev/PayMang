@@ -90,18 +90,15 @@ export async function POST(request: NextRequest) {
         let saleError;
 
         if (existingSale) {
-            console.log(`[SIM] Found pending sale ${existingSale.id}. Updating.`);
-
-            const newAmountCollected = Number(existingSale.amount_collected || 0) + Number(totalAmount);
             const newTransactionId = existingSale.transaction_id
                 ? `${existingSale.transaction_id},SIMULATED_${Date.now()}_${linkId}`
                 : `SIMULATED_${Date.now()}_${linkId}`;
 
             const updatePayload = {
-                amount_collected: newAmountCollected,
                 gateway: link.gateway,
                 transaction_id: newTransactionId,
                 status: 'paid',
+
                 metadata: {
                     ...existingSale.metadata,
                     test_mode: true,
@@ -127,7 +124,7 @@ export async function POST(request: NextRequest) {
                 student_id: link.student_id,
                 pack_id: link.pack_id,
                 total_amount: totalAmount, // For new sales, the total is what was paid
-                amount_collected: totalAmount,
+                amount_collected: 0, // Will be updated by syncPaymentToInstallments
                 gateway: link.gateway,
                 transaction_id: `SIMULATED_${Date.now()}_${linkId}`,
                 status: 'paid',
@@ -158,8 +155,8 @@ export async function POST(request: NextRequest) {
         }
 
         // 2.5 Sync installments (IMPORTANT: now required by logic)
-        const { syncGatewayPaymentToInstallments } = await import('@/lib/payments-updater');
-        await syncGatewayPaymentToInstallments(supabase, link.student_id, sale.id, totalAmount, link.gateway);
+        const { syncPaymentToInstallments } = await import('@/lib/payments-updater');
+        await syncPaymentToInstallments(supabase, link.student_id, sale.id, totalAmount, link.gateway || 'manual');
 
         // 3. Actualizar link a paid
         await supabase

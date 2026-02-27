@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CONFIG } from '@/config/app.config';
 import { calculateCommission } from '@/lib/commissions/calculator';
-import { syncGatewayPaymentToInstallments } from '@/lib/payments-updater';
+import { syncPaymentToInstallments } from '@/lib/payments-updater';
 
 /**
  * Helper to get Service Role Client
@@ -99,15 +99,10 @@ async function handlePurchaseComplete(data: any) {
             return;
         }
 
-        // Sumar al amount_collected
-        const newCollected = Number(originalSale.amount_collected || 0) + Number(totalAmount || 0);
-        await supabase
-            .from('sales')
-            .update({
-                amount_collected: newCollected,
-                updated_at: new Date().toISOString()
-            } as any)
-            .eq('id', originalSale.id);
+        // All logic (updating amount_collected + mark pending installments as paid) 
+        // is now consolidated in syncPaymentToInstallments
+        await syncPaymentToInstallments(supabase, originalSale.student_id, originalSale.id, totalAmount, 'hotmart');
+
 
         // 4. Crear comisiones para esta cuota / milestone)
         await createCommissions({
@@ -186,16 +181,15 @@ async function handlePurchaseComplete(data: any) {
         // DO NOT overwrite the total_amount (which is the agreed debt).
         // Only update the amount_collected and gateway info.
 
-        const newAmountCollected = Number(existingSale.amount_collected || 0) + Number(totalAmount);
         const newTransactionId = existingSale.transaction_id
             ? `${existingSale.transaction_id},${transactionId}`
             : transactionId;
 
         const updatePayload = {
-            amount_collected: newAmountCollected,
             gateway: 'hotmart',
             transaction_id: newTransactionId,
             status: 'paid', // Mark as paid/active
+
             metadata: {
                 ...existingSale.metadata,
                 purchase_id: data.purchase?.id,
@@ -226,7 +220,7 @@ async function handlePurchaseComplete(data: any) {
             student_id: studentId,
             pack_id: packId,
             total_amount: packPrice, // The total agreed price for the pack
-            amount_collected: totalAmount, // What was paid TODAY
+            amount_collected: 0, // Will be updated by syncPaymentToInstallments
             gateway: 'hotmart',
             transaction_id: transactionId,
             status: 'paid',
@@ -259,7 +253,8 @@ async function handlePurchaseComplete(data: any) {
     }
 
     // 2.5 Sincronizar cuotas del alumno (Restricted to THIS sale)
-    await syncGatewayPaymentToInstallments(supabase, studentId, sale.id, totalAmount, 'hotmart');
+    // This also updates amount_collected automatically
+    await syncPaymentToInstallments(supabase, studentId, sale.id, totalAmount, 'hotmart');
 
     // 3. Update link status
     await supabase

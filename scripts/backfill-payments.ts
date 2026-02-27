@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { syncGatewayPaymentToInstallments } from '../lib/payments-updater';
+import { syncPaymentToInstallments } from '../lib/payments-updater';
 import * as dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.local' });
@@ -27,7 +27,7 @@ async function run() {
         // Let's reset their pending status via the sync function
         // Note: this function naturally skips already-paid installments, 
         // but if they were manually paid vs webhook paid, it's fine.
-        await syncGatewayPaymentToInstallments(supabase, sale.student_id, sale.id, sale.amount_collected, sale.gateway);
+        await syncPaymentToInstallments(supabase, sale.student_id, sale.id, sale.amount_collected, sale.gateway);
     }
     console.log("Done backfilling.");
 }
