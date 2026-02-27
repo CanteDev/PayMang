@@ -267,27 +267,34 @@ async function handleInvoicePaid(invoice: any) {
         return;
     }
 
-    const subscriptionId = invoice.subscription;
+    // Extract Subscription ID robustly (sometimes nested in parent or lines in newer Stripe versions/test clocks)
+    const subscriptionId = invoice.subscription ||
+        invoice.parent?.subscription_details?.subscription ||
+        invoice.lines?.data?.[0]?.subscription ||
+        invoice.lines?.data?.[0]?.parent?.subscription_item_details?.subscription;
+
     const amountPaidInCents = invoice.amount_paid;
 
     if (!subscriptionId || amountPaidInCents === 0) {
+        console.warn(`No se pudo determinar el ID de suscripción en invoice ${invoice.id} o importe es 0`);
         return;
     }
 
-    const amountPaid = amountPaidInCents / 100; // Stripe viene en céntimos
+    const amountPaid = amountPaidInCents / 100;
+    console.log(`Procesando pago recurrente para suscripción: ${subscriptionId}, importe: ${amountPaid}`);
 
     // 1. Buscar la Venta original guiándonos por el stripe_subscription_id
     const { data: originalSale, error: searchError } = await supabase
         .from('sales')
         .select('*')
         .eq('gateway', 'stripe')
-        .filter('metadata->>stripe_subscription_id', 'eq', subscriptionId)
+        .contains('metadata', { stripe_subscription_id: subscriptionId })
         .order('created_at', { ascending: true })
         .limit(1)
-        .single();
+        .maybeSingle();
 
     if (searchError || !originalSale) {
-        console.error('No se encontró la Venta original para la suscripción recurrente Stripe:', subscriptionId);
+        console.error('No se encontró la Venta original para la suscripción recurrente Stripe:', subscriptionId, searchError);
         return;
     }
 
