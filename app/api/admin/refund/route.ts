@@ -85,7 +85,8 @@ export async function POST(request: NextRequest) {
                         if (!idToRefund && record.metadata) {
                             idToRefund = record.metadata.stripe_payment_intent ||
                                 record.metadata.stripe_charge_id ||
-                                record.metadata.stripe_session_id;
+                                record.metadata.stripe_session_id ||
+                                record.metadata.stripe_invoice_id;
                         }
 
                         if (!idToRefund) {
@@ -96,12 +97,20 @@ export async function POST(request: NextRequest) {
                         console.log(`Refunding Stripe ID: ${idToRefund} (Payment ${record.id})`);
 
                         if (idToRefund.startsWith('cs_')) {
-                            // Extract PI from session
                             const session = await stripe.checkout.sessions.retrieve(idToRefund);
-                            const pi = session.payment_intent as string;
+                            let pi = session.payment_intent as string;
+
+                            // For some subscriptions, PI might be null on session, check invoice
+                            if (!pi && session.invoice) {
+                                const invoiceDetails = await stripe.invoices.retrieve(session.invoice as string) as any;
+                                pi = invoiceDetails.payment_intent as string;
+                            }
+
                             if (pi) {
                                 await stripe.refunds.create({ payment_intent: pi });
                                 refundCount++;
+                            } else {
+                                throw new Error('No se encontró Payment Intent en la sesión de Checkout');
                             }
                         } else if (idToRefund.startsWith('pi_')) {
                             await stripe.refunds.create({ payment_intent: idToRefund });
@@ -115,6 +124,11 @@ export async function POST(request: NextRequest) {
                             if (inv.payment_intent) {
                                 await stripe.refunds.create({ payment_intent: inv.payment_intent as string });
                                 refundCount++;
+                            } else if (inv.charge) {
+                                await stripe.refunds.create({ charge: inv.charge as string });
+                                refundCount++;
+                            } else {
+                                throw new Error('La factura no tiene un cargo asociado para reembolsar');
                             }
                         }
                     } catch (err: any) {
