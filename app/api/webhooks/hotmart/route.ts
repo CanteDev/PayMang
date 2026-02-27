@@ -23,7 +23,12 @@ export async function POST(request: NextRequest) {
     // Verificar token de seguridad (Hotmart envía x-hotmart-hottok)
     const headersList = await headers();
     const hotmartToken = headersList.get('x-hotmart-hottok');
-    const expectedToken = process.env.HOTMART_WEBHOOK_SECRET;
+
+    // Leer el webhook secret desde app_settings (configuración de la app)
+    const { getGatewayConfig } = await import('@/lib/settings-helper');
+    const hotmartConfig = await getGatewayConfig('hotmart');
+    const expectedToken = hotmartConfig.webhook_secret || hotmartConfig.WEBHOOK_SECRET
+        || process.env.HOTMART_WEBHOOK_SECRET; // fallback a env si no está en DB
 
     if (expectedToken && hotmartToken !== expectedToken) {
         console.warn(`⚠️ Hotmart webhook token inválido. Recibido: ${hotmartToken}`);
