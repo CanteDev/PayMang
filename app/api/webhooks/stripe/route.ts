@@ -169,11 +169,11 @@ async function handleCheckoutCompleted(session: any) {
                 ...existingSale.metadata,
                 payment_intent: session.payment_intent,
                 customer: session.customer,
-                coach_id: coach_id || existingSale.metadata?.coach_id,
-                closer_id: closer_id || existingSale.metadata?.closer_id,
-                setter_id: setter_id || existingSale.metadata?.setter_id,
                 stripe_subscription_id: session.subscription // Clave para cuotas recurrentes
             },
+            coach_id: coach_id || existingSale.coach_id,
+            closer_id: closer_id || existingSale.closer_id,
+            setter_id: setter_id || existingSale.setter_id
         };
 
         const { data: updatedSale, error: updateError } = await supabase
@@ -198,11 +198,11 @@ async function handleCheckoutCompleted(session: any) {
             metadata: {
                 payment_intent: session.payment_intent,
                 customer: session.customer,
-                coach_id, // Persist metadata in sale 
-                closer_id,
-                setter_id,
                 stripe_subscription_id: session.subscription // Clave para cuotas recurrentes
             },
+            coach_id,
+            closer_id,
+            setter_id
         };
 
         const { data: newSale, error: insertError } = await supabase
@@ -240,17 +240,7 @@ async function handleCheckoutCompleted(session: any) {
         .update({ status: 'paid' })
         .eq('id', linkId);
 
-    // 4. Crear comisiones automáticamente
-    await createCommissions({
-        saleId: sale.id,
-        totalAmount: actualAmountPaid,
-        coachId: coach_id,
-        closerId: closer_id,
-        setterId: setter_id,
-        milestoneNumber: 1
-    });
-
-    console.log(`✅ Venta ${sale.id} procesada y comisiones (Milestone 1) creadas`);
+    console.log(`✅ Venta ${sale.id} procesada. Las comisiones se generarán mediante el trigger de BD.`);
 }
 
 /**
@@ -333,17 +323,7 @@ async function handleInvoicePaid(invoice: any) {
     }
 
 
-    // 4. Crear comisiones para esta nueva cuota
-    await createCommissions({
-        saleId: originalSale.id,
-        totalAmount: amountPaid, // Solo sobre la parte pagada HOY
-        coachId: originalSale.metadata?.coach_id,
-        closerId: originalSale.metadata?.closer_id,
-        setterId: originalSale.metadata?.setter_id,
-        milestoneNumber: nextMilestone
-    });
-
-    console.log(`✅ Stripe Recurrent Invoice procesada: Añadido importe a la Venta ${originalSale.id}, creadas comisiones Milestone ${nextMilestone}`);
+    console.log(`✅ Stripe Recurrent Invoice procesada: Añadido importe a la Venta ${originalSale.id}. Las comisiones se generarán mediante el trigger de BD.`);
 }
 
 /**
@@ -381,72 +361,3 @@ async function handleChargeRefunded(charge: any) {
     console.log(`⚠️ Venta ${sale.id} reembolsada, comisiones marcadas como incidencia`);
 }
 
-/**
- * Crear comisiones para una venta
- */
-async function createCommissions({
-    saleId,
-    totalAmount,
-    coachId,
-    closerId,
-    setterId,
-    milestoneNumber = 1
-}: {
-    saleId: string;
-    totalAmount: number;
-    coachId?: string;
-    closerId?: string;
-    setterId?: string;
-    milestoneNumber?: number;
-}) {
-    const supabase = getSupabaseAdmin();
-    const commissions: any[] = [];
-
-    // Coach: 10%
-    if (coachId) {
-        commissions.push({
-            sale_id: saleId,
-            agent_id: coachId,
-            role_at_sale: 'coach',
-            amount: await calculateCommission(totalAmount, 'coach'),
-            status: 'pending',
-            milestone: milestoneNumber,
-        });
-    }
-
-    // Closer: 8%
-    if (closerId) {
-        commissions.push({
-            sale_id: saleId,
-            agent_id: closerId,
-            role_at_sale: 'closer',
-            amount: await calculateCommission(totalAmount, 'closer'),
-            status: 'pending',
-            milestone: milestoneNumber,
-        });
-    }
-
-    // Setter: 1% (opcional)
-    if (setterId) {
-        commissions.push({
-            sale_id: saleId,
-            agent_id: setterId,
-            role_at_sale: 'setter',
-            amount: await calculateCommission(totalAmount, 'setter'),
-            status: 'pending',
-            milestone: milestoneNumber,
-        });
-    }
-
-    // Insertar todas las comisiones
-    const { error } = await supabase
-        .from('commissions')
-        .insert(commissions);
-
-    if (error) {
-        console.error('Error creando comisiones:', error);
-        throw error;
-    }
-
-    console.log(`✅ ${commissions.length} comisiones (milestone ${milestoneNumber}) creadas para venta ${saleId}`);
-}

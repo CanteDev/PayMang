@@ -14,14 +14,18 @@ export async function createSaleAction(studentId: string, salePayload: any) {
             student_id: studentId,
             pack_id: salePayload.pack_id,
             gateway: 'manual',
-            transaction_id: `manual_${Date.now()}`,
+            transaction_id: salePayload.transaction_id || `manual_${Date.now()}`,
             total_amount: salePayload.agreed_price,
             amount_collected: 0,
             status: 'pending',
             payment_method: salePayload.payment_method,
             total_installments: salePayload.total_installments,
             installment_period: salePayload.installment_period,
-            start_date: salePayload.start_date
+            start_date: salePayload.start_date,
+            closer_id: salePayload.closer_id,
+            coach_id: salePayload.coach_id,
+            setter_id: salePayload.setter_id,
+            metadata: salePayload.metadata || {}
         };
 
         const { data: newSale, error: saleError } = await (supabase as any)
@@ -182,7 +186,10 @@ export async function updateSaleAction(saleId: string, payload: any) {
                 payment_method: payload.payment_method,
                 total_installments: payload.total_installments,
                 installment_period: payload.installment_period,
-                start_date: payload.start_date
+                start_date: payload.start_date,
+                closer_id: payload.closer_id,
+                coach_id: payload.coach_id,
+                setter_id: payload.setter_id
             })
             .eq('id', saleId)
             .select()

@@ -59,6 +59,14 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
     const [userRole, setUserRole] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
 
+    // Staff for Attribution
+    const [coaches, setCoaches] = useState<any[]>([]);
+    const [closers, setClosers] = useState<any[]>([]);
+    const [setters, setSetters] = useState<any[]>([]);
+    const [selectedCoachId, setSelectedCoachId] = useState('');
+    const [selectedCloserId, setSelectedCloserId] = useState('');
+    const [selectedSetterId, setSelectedSetterId] = useState('');
+
     const supabase = createClient();
 
     useEffect(() => {
@@ -116,6 +124,37 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
             .eq('is_active', true)
             .order('name');
         if (packsData) setPacks(packsData);
+
+        // Fetch Staff
+        const { data: staffData } = await supabase
+            .from('profiles')
+            .select('id, full_name, role')
+            .eq('is_active', true);
+
+        if (staffData) {
+            const coachesList = staffData.filter((p: any) => p.role === 'coach');
+            const closersList = staffData.filter((p: any) => p.role === 'closer');
+            const settersList = staffData.filter((p: any) => p.role === 'setter');
+
+            setCoaches(coachesList);
+            setClosers(closersList);
+            setSetters(settersList);
+
+            // Default selections from student if creating new
+            if (!editingSaleId) {
+                const { data: std } = await supabase
+                    .from('students')
+                    .select('assigned_coach_id, closer_id, setter_id')
+                    .eq('id', student.id)
+                    .single();
+
+                if (std) {
+                    setSelectedCoachId((std as any).assigned_coach_id || '');
+                    setSelectedCloserId((std as any).closer_id || '');
+                    setSelectedSetterId((std as any).setter_id || '');
+                }
+            }
+        }
 
         setLoading(false);
     };
@@ -198,7 +237,10 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                 payment_method: saleMethod,
                 total_installments: saleMethod === 'installments' ? saleInstallments : 1,
                 installment_period: salePeriod,
-                start_date: saleStartDate
+                start_date: saleStartDate,
+                coach_id: selectedCoachId,
+                closer_id: selectedCloserId,
+                setter_id: selectedSetterId
             });
 
             if (res.success) {
@@ -227,7 +269,10 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                 payment_method: saleMethod,
                 total_installments: saleMethod === 'installments' ? saleInstallments : 1,
                 installment_period: salePeriod,
-                start_date: saleStartDate
+                start_date: saleStartDate,
+                coach_id: selectedCoachId,
+                closer_id: selectedCloserId,
+                setter_id: selectedSetterId
             });
 
             if (res.success) {
@@ -251,6 +296,9 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
         setSaleInstallments(sale.total_installments || 1);
         setSalePeriod(sale.installment_period || 1);
         setSaleStartDate(sale.start_date);
+        setSelectedCoachId(sale.coach_id || '');
+        setSelectedCloserId(sale.closer_id || '');
+        setSelectedSetterId(sale.setter_id || '');
     };
 
     // Totals across ALL sales for the header summary
@@ -413,6 +461,46 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                                             onChange={e => setSaleStartDate(e.target.value)}
                                             required
                                         />
+                                    </div>
+                                </div>
+
+                                {/* Agent Attribution */}
+                                <div className="pt-2 border-t border-blue-200/50">
+                                    <p className="text-[10px] font-semibold text-blue-600 uppercase mb-2">Atribución de Comisiones (Equipo)</p>
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px]">Closer</Label>
+                                            <select
+                                                className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-xs"
+                                                value={selectedCloserId}
+                                                onChange={e => setSelectedCloserId(e.target.value)}
+                                            >
+                                                <option value="">-- Sin asignar --</option>
+                                                {closers.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px]">Coach</Label>
+                                            <select
+                                                className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-xs"
+                                                value={selectedCoachId}
+                                                onChange={e => setSelectedCoachId(e.target.value)}
+                                            >
+                                                <option value="">-- Sin asignar --</option>
+                                                {coaches.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px]">Setter</Label>
+                                            <select
+                                                className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-xs"
+                                                value={selectedSetterId}
+                                                onChange={e => setSelectedSetterId(e.target.value)}
+                                            >
+                                                <option value="">-- Sin asignar --</option>
+                                                {setters.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="flex justify-end pt-2">

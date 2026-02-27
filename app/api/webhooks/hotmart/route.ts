@@ -104,17 +104,7 @@ async function handlePurchaseComplete(data: any) {
         await syncPaymentToInstallments(supabase, originalSale.student_id, originalSale.id, totalAmount, 'hotmart');
 
 
-        // 4. Crear comisiones para esta cuota / milestone)
-        await createCommissions({
-            saleId: originalSale.id,
-            totalAmount: totalAmount, // Solo la cantidad de ESTA cuota
-            coachId: originalSale.metadata?.coach_id,
-            closerId: originalSale.metadata?.closer_id,
-            setterId: originalSale.metadata?.setter_id,
-            milestoneNumber: recurrenceNumber
-        });
-
-        console.log(`✅ Hotmart installment #${recurrenceNumber} for sale ${originalSale.id} processed appended to original.`);
+        console.log(`✅ Hotmart installment #${recurrenceNumber} for sale ${originalSale.id} processed appended to original. Las comisiones se generarán mediante el trigger de BD.`);
         return;
     }
 
@@ -195,14 +185,11 @@ async function handlePurchaseComplete(data: any) {
                 purchase_id: data.purchase?.id,
                 buyer_email: data.buyer?.email,
                 product: data.product,
-                coach_id: coach_id || existingSale.metadata?.coach_id,
-                closer_id: closer_id || existingSale.metadata?.closer_id,
-                setter_id: setter_id || existingSale.metadata?.setter_id,
-                link_id: linkId,
-                pack_offer_id: offerId,
-                hotmart_subscription_code: subscriptionCode,
                 hotmart_recurrence_number: recurrenceNumber || 1
             },
+            coach_id: coach_id || existingSale.coach_id,
+            closer_id: closer_id || existingSale.closer_id,
+            setter_id: setter_id || existingSale.setter_id
         };
 
         const { data: updatedSale, error: updateError } = await supabase
@@ -228,14 +215,11 @@ async function handlePurchaseComplete(data: any) {
                 purchase_id: data.purchase?.id,
                 buyer_email: data.buyer?.email,
                 product: data.product,
-                coach_id: coach_id,
-                closer_id: closer_id,
-                setter_id: setter_id,
-                link_id: linkId,
-                pack_offer_id: offerId,
-                hotmart_subscription_code: subscriptionCode, // KEY FOR FUTURE INSTALLMENTS
                 hotmart_recurrence_number: recurrenceNumber || 1
             },
+            coach_id: coach_id,
+            closer_id: closer_id,
+            setter_id: setter_id
         };
 
         const { data: newSale, error: insertError } = await supabase
@@ -262,17 +246,7 @@ async function handlePurchaseComplete(data: any) {
         .update({ status: 'paid' })
         .eq('id', linkId);
 
-    // 4. Create commissions (Milestone 1 by default now)
-    await createCommissions({
-        saleId: sale.id,
-        totalAmount: totalAmount, // Comisionamos sobre lo pagado HOY
-        coachId: coach_id,
-        closerId: closer_id,
-        setterId: setter_id,
-        milestoneNumber: 1
-    });
-
-    console.log(`✅ Hotmart FIRST sale ${sale.id} processed and initial commissions created`);
+    console.log(`✅ Hotmart FIRST sale ${sale.id} processed. Las comisiones se generarán mediante el trigger de BD.`);
 }
 
 /**
@@ -314,71 +288,3 @@ async function handlePurchaseRefunded(data: any) {
     console.log(`⚠️ Hotmart sale ${sale.id} refunded, commissions marked as incidence`);
 }
 
-/**
- * Función reutilizada de Stripe webhook
- */
-async function createCommissions({
-    saleId,
-    totalAmount,
-    coachId,
-    closerId,
-    setterId,
-    milestoneNumber = 1
-}: {
-    saleId: string;
-    totalAmount: number;
-    coachId?: string;
-    closerId?: string;
-    setterId?: string;
-    milestoneNumber?: number;
-}) {
-    const supabase = getSupabaseAdmin();
-    const commissions: any[] = [];
-
-    // Coach: 10%
-    if (coachId) {
-        commissions.push({
-            sale_id: saleId,
-            agent_id: coachId,
-            role_at_sale: 'coach',
-            amount: await calculateCommission(totalAmount, 'coach'),
-            status: 'pending',
-            milestone: milestoneNumber,
-        });
-    }
-
-    // Closer: 8%
-    if (closerId) {
-        commissions.push({
-            sale_id: saleId,
-            agent_id: closerId,
-            role_at_sale: 'closer',
-            amount: await calculateCommission(totalAmount, 'closer'),
-            status: 'pending',
-            milestone: milestoneNumber,
-        });
-    }
-
-    // Setter: 1% (optional)
-    if (setterId) {
-        commissions.push({
-            sale_id: saleId,
-            agent_id: setterId,
-            role_at_sale: 'setter',
-            amount: await calculateCommission(totalAmount, 'setter'),
-            status: 'pending',
-            milestone: milestoneNumber,
-        });
-    }
-
-    const { error } = await supabase
-        .from('commissions')
-        .insert(commissions);
-
-    if (error) {
-        console.error('Error creando comisiones:', error);
-        throw error;
-    }
-
-    console.log(`✅ ${commissions.length} comisiones (milestone ${milestoneNumber}) creadas para venta ${saleId}`);
-}
