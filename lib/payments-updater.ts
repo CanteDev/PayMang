@@ -1,18 +1,19 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 
+export interface SyncPaymentResult {
+    /** ID del primer pago marcado como pagado (compatibilidad versiones anteriores) */
+    id: string;
+    /** IDs de TODOS los pagos marcados como pagados en esta sincronización */
+    allIds: string[];
+}
+
 /**
  * Marks pending installments (payments) for a student as 'paid' 
  * based on the amount received from a payment gateway webhook.
  * 
- * It iterates through chronological pending payments and marks them
- * as paid until the webhook amount is exhausted.
- */
-/**
- * Marks pending installments (payments) for a student as 'paid' 
- * based on the amount received.
- * 
- * It iterates through chronological pending payments and marks them
- * as paid (or partially paid) until the received amount is exhausted.
+ * Returns ALL payment IDs that were marked as paid so that the caller
+ * (webhook handler) can stamp the same external_id on all of them,
+ * preventing duplicate rows in the Payments admin view.
  */
 export async function syncPaymentToInstallments(
     supabase: SupabaseClient,
@@ -20,7 +21,7 @@ export async function syncPaymentToInstallments(
     saleId: string,
     amountReceived: number,
     gateway: string
-): Promise<{ id: string } | null> {
+): Promise<SyncPaymentResult | null> {
     if (!studentId || !saleId || amountReceived <= 0) return null;
 
     // 0. Update the sale's collected amount
@@ -52,7 +53,8 @@ export async function syncPaymentToInstallments(
     }
 
     let remainingToCover = amountReceived;
-    let mainPaymentRecord: { id: string } | null = null;
+    let mainPaymentRecord: SyncPaymentResult | null = null;
+    const allMarkedIds: string[] = [];
 
     // 2. Iterate and consume pending installments
     if (pendingPayments && pendingPayments.length > 0) {
@@ -77,7 +79,8 @@ export async function syncPaymentToInstallments(
                     console.error(`Error marking installment ${payment.id} as paid:`, updateError);
                 } else {
                     remainingToCover -= payment.amount;
-                    if (!mainPaymentRecord) mainPaymentRecord = data;
+                    allMarkedIds.push(data.id);
+                    if (!mainPaymentRecord) mainPaymentRecord = { id: data.id, allIds: [] };
                 }
             } else {
                 // Partial consumption: Split the installment
@@ -117,11 +120,12 @@ export async function syncPaymentToInstallments(
                 if (insertError) {
                     console.error(`Error inserting partial paid record:`, insertError);
                 } else {
-                    if (!mainPaymentRecord) mainPaymentRecord = data;
+                    allMarkedIds.push(data.id);
+                    if (!mainPaymentRecord) mainPaymentRecord = { id: data.id, allIds: [] };
                 }
 
                 remainingToCover = 0;
-                break; // Payment fully allocated
+                break;
             }
         }
     }
@@ -133,7 +137,7 @@ export async function syncPaymentToInstallments(
             sale_id: saleId,
             amount: remainingToCover,
             status: 'paid',
-            due_date: new Date().toISOString().split('T')[0], // Use today for surplus
+            due_date: new Date().toISOString().split('T')[0],
             method: gateway,
             paid_at: new Date().toISOString(),
             notes: gateway === 'manual' ? 'Pago manual excedente' : 'Excedente de pago / Pago sin cuota previa',
@@ -151,8 +155,13 @@ export async function syncPaymentToInstallments(
             console.error(`Failed to insert visual history record for student ${studentId}:`, insertError);
         } else {
             console.log(`✅ Inserted surplus ledger record of ${remainingToCover}€ for student ${studentId} via ${gateway}`);
-            if (!mainPaymentRecord) mainPaymentRecord = data;
+            allMarkedIds.push(data.id);
+            if (!mainPaymentRecord) mainPaymentRecord = { id: data.id, allIds: [] };
         }
+    }
+
+    if (mainPaymentRecord) {
+        mainPaymentRecord.allIds = allMarkedIds;
     }
 
     return mainPaymentRecord;

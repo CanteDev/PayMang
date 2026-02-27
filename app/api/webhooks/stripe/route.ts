@@ -223,16 +223,18 @@ async function handleCheckoutCompleted(session: any) {
     // This also updates amount_collected automatically
     const updatedPayment = await syncPaymentToInstallments(supabase, studentId, sale.id, actualAmountPaid, 'stripe');
 
-    // Persist the Stripe Session ID or Payment Intent as external_id in the payment record for refunds
-    if (updatedPayment?.id) {
+    // Persist the Stripe Session ID or Payment Intent as external_id on ALL
+    // installments covered by this checkout (prevents split rows in admin view)
+    if (updatedPayment?.allIds && updatedPayment.allIds.length > 0) {
         await supabase
             .from('payments')
             .update({
                 external_id: session.payment_intent || session.id,
                 metadata: { stripe_session_id: session.id }
             })
-            .eq('id', updatedPayment.id);
+            .in('id', updatedPayment.allIds);
     }
+
 
     // 3. Actualizar estado del link
     await supabase

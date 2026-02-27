@@ -61,6 +61,7 @@ export default function AdminPaymentsPage() {
                     created_at, 
                     paid_at, 
                     method,
+                    external_id,
                     student:students!student_id(full_name, email),
                     sale:sales!sale_id(
                         id, 
@@ -85,11 +86,12 @@ export default function AdminPaymentsPage() {
             const { data, error, count } = await query;
             if (error) throw error;
 
-            const mapped = (data || []).map((p: any) => ({
+            const rawMapped = (data || []).map((p: any) => ({
                 id: p.id,
-                amount: p.amount,
+                external_id: p.external_id || null,
+                amount: Number(p.amount),
                 gateway: p.method || p.sale?.gateway || 'manual',
-                status: p.status, // Use real status: paid, refunded, etc.
+                status: p.status,
                 created_at: p.paid_at || p.created_at,
                 type: (p.method && !['stripe', 'hotmart', 'sequra'].includes(p.method)) ? 'manual' : 'sale',
                 student_name: p.student?.full_name,
@@ -97,6 +99,21 @@ export default function AdminPaymentsPage() {
                 pack_name: p.sale?.pack?.name,
                 sale_id: p.sale?.id
             }));
+
+            // Deduplicate by external_id: when multiple installments share the same
+            // Stripe/Hotmart transaction, show them as ONE row with combined amount
+            const seen = new Map<string, any>();
+            const mapped: any[] = [];
+            for (const p of rawMapped) {
+                const key = p.external_id;
+                if (key && seen.has(key)) {
+                    // Add amount to existing row — don't add new row
+                    seen.get(key).amount = Number((seen.get(key).amount + p.amount).toFixed(2));
+                } else {
+                    seen.set(key || p.id, p); // null external_id → use own id as key
+                    mapped.push(p);
+                }
+            }
 
             setSales(mapped);
             setTotalCount(count || 0);
