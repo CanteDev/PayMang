@@ -7,31 +7,25 @@ import { revalidatePath } from 'next/cache';
 export async function getDashboardMetrics(startDate?: string, endDate?: string) {
     const supabase = await createClient();
 
-    // 1. Total Revenue (Gross): Sum of all transactions (Sales + Manual)
+    // 1. Total Revenue (Gross): Sum of all PAID payments (Actual Cash Flow)
+    // We query 'payments' directly to avoid double counting from 'sales' view
     let query = supabase
-        .from('all_transactions')
+        .from('payments')
         .select('amount')
         .eq('status', 'paid');
 
-    if (startDate) query = query.gte('created_at', startDate);
-    if (endDate) query = query.lte('created_at', endDate);
+    if (startDate) query = query.gte('paid_at', startDate);
+    if (endDate) query = query.lte('paid_at', endDate);
 
-    const { data: transactionsData, error: transError } = await query;
+    const { data: paymentsData, error: payError } = await query;
 
-    if (transError) {
-        console.error('Error fetching transactions:', transError);
-        // Fallback to sales + payments if view doesn't exist yet
-        const { data: salesData } = await supabase.from('sales').select('total_amount').eq('status', 'paid');
-        const { data: paymentsData } = await supabase.from('payments').select('amount').eq('status', 'paid');
-
-        const salesTotal = (salesData as any[] || []).reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
-        const paymentsTotal = (paymentsData as any[] || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-
-        const totalRevenue = salesTotal + paymentsTotal;
-        return { totalRevenue, netCashFlow: totalRevenue, pendingPayouts: 0, burnRate: 0 };
+    if (payError) {
+        console.error('Error fetching payments for revenue:', payError);
+        return { totalRevenue: 0, netCashFlow: 0, pendingPayouts: 0, burnRate: 0 };
     }
 
-    const totalRevenue = (transactionsData as any[]).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const totalRevenue = (paymentsData as any[]).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
 
     // 2. Paid Commissions: Sum of all PAID commissions
     let commQuery = supabase
