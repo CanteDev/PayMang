@@ -14,8 +14,9 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tags, ExternalLink, Trash2, PlusCircle, CreditCard } from 'lucide-react';
+import { Tags, ExternalLink, Trash2, PlusCircle, CreditCard, MoveHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
+import { reassignOfferPackAction } from '@/app/actions/packs';
 
 interface PackOffer {
     id: string;
@@ -39,6 +40,8 @@ export default function PackOffersManager({ packId, packName, trigger }: PackOff
     const [open, setOpen] = useState(false);
     const [offers, setOffers] = useState<PackOffer[]>([]);
     const [loadingOffers, setLoadingOffers] = useState(true);
+    const [allPacks, setAllPacks] = useState<{ id: string; name: string }[]>([]);
+    const [movingOfferId, setMovingOfferId] = useState<string | null>(null);
 
     // Form state for new offer
     const [isCreating, setIsCreating] = useState(false);
@@ -55,12 +58,27 @@ export default function PackOffersManager({ packId, packName, trigger }: PackOff
     useEffect(() => {
         if (open) {
             loadOffers();
+            loadAllPacks();
         } else {
             // Reset states on close
             setIsCreating(false);
+            setMovingOfferId(null);
             resetForm();
         }
     }, [open, packId]);
+
+    const loadAllPacks = async () => {
+        try {
+            const { data } = await supabase
+                .from('packs')
+                .select('id, name')
+                .eq('is_active', true)
+                .order('name');
+            setAllPacks(data || []);
+        } catch (err) {
+            console.error('Error loading packs for move:', err);
+        }
+    };
 
     const loadOffers = async () => {
         setLoadingOffers(true);
@@ -158,6 +176,31 @@ export default function PackOffersManager({ packId, packName, trigger }: PackOff
         } catch (error: any) {
             console.error('Error deleting offer:', error);
             toast.error(error.message || 'Error al eliminar la oferta');
+        }
+    };
+
+    const handleMoveOffer = async (offerId: string, offerName: string, newPackId: string) => {
+        if (!newPackId || newPackId === packId) return;
+
+        const newPackName = allPacks.find(p => p.id === newPackId)?.name || 'otro pack';
+        if (!confirm(`¿Estás seguro de mover la oferta "${offerName}" al pack "${newPackName}"?`)) {
+            return;
+        }
+
+        setMovingOfferId(offerId);
+        try {
+            const result = await reassignOfferPackAction(offerId, newPackId);
+            if (result.success) {
+                toast.success('Oferta movida correctamente');
+                // Since it moved to another pack, we remove it from the current list
+                setOffers(prev => prev.filter(o => o.id !== offerId));
+            } else {
+                toast.error(result.error || 'Error al mover la oferta');
+            }
+        } catch (error: any) {
+            toast.error('Error de conexión al mover la oferta');
+        } finally {
+            setMovingOfferId(null);
         }
     };
 
@@ -316,6 +359,7 @@ export default function PackOffersManager({ packId, packName, trigger }: PackOff
                                         <TableHead>Nombre</TableHead>
                                         <TableHead>Precio</TableHead>
                                         <TableHead>Link</TableHead>
+                                        <TableHead>Mover a...</TableHead>
                                         <TableHead className="w-[50px]"></TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -350,6 +394,21 @@ export default function PackOffersManager({ packId, packName, trigger }: PackOff
                                                         <ExternalLink className="w-3.5 h-3.5" />
                                                     </a>
                                                 ) : <span className="text-gray-400 text-xs">-</span>}
+                                            </TableCell>
+                                            <TableCell>
+                                                <select
+                                                    disabled={!!movingOfferId}
+                                                    value={packId}
+                                                    onChange={(e) => handleMoveOffer(offer.id, offer.name, e.target.value)}
+                                                    className="text-[11px] h-7 px-1 rounded border border-gray-200 bg-white min-w-[120px]"
+                                                >
+                                                    <option value={packId}>Destino...</option>
+                                                    {allPacks.filter(p => p.id !== packId).map(p => (
+                                                        <option key={p.id} value={p.id}>
+                                                            ➡️ {p.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
                                             </TableCell>
                                             <TableCell>
                                                 <Button
