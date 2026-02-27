@@ -51,8 +51,7 @@ export default function AdminPaymentsPage() {
             const from = (page - 1) * PAGE_SIZE;
             const to = from + PAGE_SIZE - 1;
 
-            // Base query on PAYMENTS table instead of SALES
-            // This ensures we see every individual installment/charge
+            // Load paid + refunded payments (individual installments)
             let query = (supabase as any)
                 .from('payments')
                 .select(`
@@ -69,7 +68,7 @@ export default function AdminPaymentsPage() {
                         pack:packs!pack_id(name)
                     )
                 `, { count: 'exact' })
-                .eq('status', 'paid') // Only show confirmed received payments
+                .in('status', ['paid', 'refunded'])
                 .order('paid_at', { ascending: false });
 
             // Apply filters
@@ -90,7 +89,7 @@ export default function AdminPaymentsPage() {
                 id: p.id,
                 amount: p.amount,
                 gateway: p.method || p.sale?.gateway || 'manual',
-                status: 'paid', // We filtered by paid
+                status: p.status, // Use real status: paid, refunded, etc.
                 created_at: p.paid_at || p.created_at,
                 type: (p.method && !['stripe', 'hotmart', 'sequra'].includes(p.method)) ? 'manual' : 'sale',
                 student_name: p.student?.full_name,
@@ -157,18 +156,16 @@ export default function AdminPaymentsPage() {
         return differenceInDays <= 14;
     };
 
-    const handleRefund = async (saleId: string) => {
-        if (!confirm('¿Estás seguro de que deseas reembolsar este pago? Esta acción no se puede deshacer y cancelará las comisiones asociadas.')) {
+    const handleRefund = async (saleId: string, paymentId: string) => {
+        if (!confirm('¿Estás seguro de que deseas reembolsar este pago? Esta acción no se puede deshacer.')) {
             return;
         }
 
         try {
             const response = await fetch('/api/admin/refund', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ saleId }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ saleId, paymentId }),
             });
 
             const data = await response.json();
@@ -178,7 +175,7 @@ export default function AdminPaymentsPage() {
             }
 
             alert('Reembolso procesado correctamente');
-            loadSales(); // Reload the table
+            loadSales();
         } catch (error: any) {
             console.error('Error:', error);
             alert(error.message || 'Error al procesar el reembolso');
@@ -282,15 +279,18 @@ export default function AdminPaymentsPage() {
                                                     {Number(sale.amount || 0).toFixed(2)}€
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    {sale.type === 'sale' && (sale.status === 'completed' || sale.status === 'paid') && isRefundable(sale.created_at) && sale.sale_id && (
+                                                    {sale.type === 'sale' && sale.status === 'paid' && isRefundable(sale.created_at) && sale.sale_id && (
                                                         <button
-                                                            onClick={() => handleRefund(sale.sale_id!)}
+                                                            onClick={() => handleRefund(sale.sale_id!, sale.id)}
                                                             className="text-xs text-red-600 hover:text-red-800 font-medium underline"
                                                         >
-                                                            Reembolsar Todo
+                                                            Reembolsar
                                                         </button>
                                                     )}
-                                                    {sale.type === 'manual' && (
+                                                    {sale.status === 'refunded' && (
+                                                        <span className="text-xs text-gray-400 italic">Reembolsado</span>
+                                                    )}
+                                                    {sale.type === 'manual' && sale.status !== 'refunded' && (
                                                         <span className="text-xs text-gray-400 italic">Manual</span>
                                                     )}
                                                 </TableCell>
