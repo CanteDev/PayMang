@@ -3,15 +3,14 @@ import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import { refundHotmartSale } from '@/lib/hotmart/checkout';
 
-// Helper to get Stripe Client
-function getStripeClient() {
-    const apiKey = process.env.STRIPE_SECRET_KEY;
+// Helper to get Stripe Client dynamically from database settings
+async function getStripeClient() {
+    const { getGatewayConfig } = await import('@/lib/settings-helper');
+    const config = await getGatewayConfig('stripe');
+    const apiKey = config.secret_key || config.SECRET_KEY;
+
     if (!apiKey) {
-        // Fallback or warning during build
-        console.warn('STRIPE_SECRET_KEY missing');
-        // We still need to return something to avoid breaking types, 
-        // but in runtime it will throw if used.
-        return new Stripe('sk_test_placeholder');
+        throw new Error('Stripe API Key not configured in settings');
     }
     return new Stripe(apiKey);
 }
@@ -64,57 +63,93 @@ export async function POST(request: NextRequest) {
 
         // 2. Process Refund based on Gateway
         if (sale.gateway === 'stripe') {
-            const stripe = getStripeClient();
+            const stripe = await getStripeClient();
 
-            // Fetch all paid payments for this sale that have an external_id
+            // Fetch all paid payments for this sale
             const { data: paidRecords } = await supabase
                 .from('payments')
                 .select('*')
                 .eq('sale_id', saleId)
-                .eq('status', 'paid')
-                .not('external_id', 'is', null);
+                .eq('status', 'paid');
+
+            let refundCount = 0;
+            let refundErrors: string[] = [];
 
             if (paidRecords && paidRecords.length > 0) {
-                console.log(`Found ${paidRecords.length} paid installments to refund via external_id`);
+                console.log(`Found ${paidRecords.length} paid installments to attempt refund`);
                 for (const record of paidRecords) {
                     try {
-                        const idToRefund = record.external_id;
+                        let idToRefund = record.external_id;
+
+                        // If no external_id, try to find it in record metadata
+                        if (!idToRefund && record.metadata) {
+                            idToRefund = record.metadata.stripe_payment_intent ||
+                                record.metadata.stripe_charge_id ||
+                                record.metadata.stripe_session_id;
+                        }
+
+                        if (!idToRefund) {
+                            console.warn(`Payment ${record.id} has no external_id or usable metadata`);
+                            continue;
+                        }
+
                         console.log(`Refunding Stripe ID: ${idToRefund} (Payment ${record.id})`);
 
-                        if (idToRefund.startsWith('pi_')) {
+                        if (idToRefund.startsWith('cs_')) {
+                            // Extract PI from session
+                            const session = await stripe.checkout.sessions.retrieve(idToRefund);
+                            const pi = session.payment_intent as string;
+                            if (pi) {
+                                await stripe.refunds.create({ payment_intent: pi });
+                                refundCount++;
+                            }
+                        } else if (idToRefund.startsWith('pi_')) {
                             await stripe.refunds.create({ payment_intent: idToRefund });
+                            refundCount++;
                         } else if (idToRefund.startsWith('ch_')) {
                             await stripe.refunds.create({ charge: idToRefund });
-                        } else {
-                            console.warn(`Unknown Stripe ID format for refund: ${idToRefund}`);
+                            refundCount++;
+                        } else if (idToRefund.startsWith('in_')) {
+                            // Invoices are not directly refundable, we need the PI of the invoice
+                            const inv = await stripe.invoices.retrieve(idToRefund);
+                            if (inv.payment_intent) {
+                                await stripe.refunds.create({ payment_intent: inv.payment_intent as string });
+                                refundCount++;
+                            }
                         }
                     } catch (err: any) {
                         console.error(`Error refunding payment ${record.id}:`, err.message);
-                        // We continue with others if one fails? Or fail all? 
-                        // For now, let's just log and continue to try to refund as much as possible.
-                    }
-                }
-            } else {
-                // FALLBACK: Old logic using sale.transaction_id
-                console.log('No individual payment external_ids found. Falling back to sale.transaction_id logic.');
-                let paymentIntentId = sale.transaction_id;
-
-                if (!paymentIntentId || paymentIntentId.startsWith('TEST_')) {
-                    console.log('Skipping refund for test transaction');
-                } else {
-                    // Try to handle cs_ sessions if present in transaction_id
-                    if (paymentIntentId.startsWith('cs_')) {
-                        const session = await stripe.checkout.sessions.retrieve(paymentIntentId);
-                        paymentIntentId = session.payment_intent as string;
-                    }
-
-                    if (paymentIntentId) {
-                        await stripe.refunds.create({ payment_intent: paymentIntentId });
+                        refundErrors.push(`${record.id}: ${err.message}`);
                     }
                 }
             }
 
-        } else if (sale.gateway === 'hotmart') {
+            // Fallback for Sale level transaction_id if nothing was refunded by individual payments
+            if (refundCount === 0 && sale.transaction_id && !sale.transaction_id.startsWith('TEST_')) {
+                try {
+                    let tid = sale.transaction_id;
+                    if (tid.startsWith('cs_')) {
+                        const sess = await stripe.checkout.sessions.retrieve(tid);
+                        tid = sess.payment_intent as string;
+                    }
+                    if (tid && (tid.startsWith('pi_') || tid.startsWith('ch_'))) {
+                        await stripe.refunds.create({ payment_intent: tid.startsWith('pi_') ? tid : undefined, charge: tid.startsWith('ch_') ? tid : undefined });
+                        refundCount++;
+                    }
+                } catch (err: any) {
+                    console.error(`Fallback refund error:`, err.message);
+                    refundErrors.push(`Fallback: ${err.message}`);
+                }
+            }
+
+            if (refundCount === 0 && refundErrors.length > 0) {
+                return NextResponse.json({
+                    error: 'No se pudo procesar ningún reembolso en Stripe.',
+                    details: refundErrors
+                }, { status: 400 });
+            }
+        }
+        else if (sale.gateway === 'hotmart') {
             const transactionId = sale.transaction_id;
             // Try/Catch specifically for Hotmart API to allow "Force" refund if not found in Sandbox?
             try {
@@ -129,28 +164,39 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: `Refund not supported for gateway: ${sale.gateway}` }, { status: 400 });
         }
 
-        // 3. Update Database
-        // We update optimistically. Webhooks should typically handle this, but for Admin action we want immediate feedback.
+        // 3. Update Database only if at least one refund succeeded
+        if (refundCount > 0) {
+            // Update Sale Status
+            const { error: updateError } = await supabase
+                .from('sales')
+                .update({ status: 'refunded' })
+                .eq('id', saleId);
 
-        // Update Sale Status
-        const { error: updateError } = await supabase
-            .from('sales')
-            .update({ status: 'refunded' })
-            .eq('id', saleId);
+            if (updateError) throw updateError;
 
-        if (updateError) throw updateError;
+            // Update Commissions Status
+            await supabase
+                .from('commissions')
+                .update({
+                    status: 'cancelled',
+                    incidence_note: 'Reembolsado por Admin desde Panel de Pagos'
+                })
+                .eq('sale_id', saleId);
 
-        // Update Commissions Status
-        // Mark as 'cancelled' as requested by user.
-        await supabase
-            .from('commissions')
-            .update({
-                status: 'cancelled',
-                incidence_note: 'Reembolsado por Admin desde Panel de Pagos'
-            })
-            .eq('sale_id', saleId);
+            // Update Payments Status
+            await supabase
+                .from('payments')
+                .update({ status: 'refunded' })
+                .eq('sale_id', saleId)
+                .eq('status', 'paid');
 
-        return NextResponse.json({ success: true, message: 'Refund processed successfully' });
+            return NextResponse.json({ success: true, message: `Refund processed successfully (${refundCount} payments)` });
+        } else {
+            return NextResponse.json({
+                error: 'No se pudo procesar el reembolso en Stripe.',
+                details: refundErrors.length > 0 ? refundErrors : ['No se encontraron IDs de transacción válidos']
+            }, { status: 400 });
+        }
 
     } catch (error: any) {
         console.error('Refund error:', error);
