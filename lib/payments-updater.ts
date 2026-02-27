@@ -20,8 +20,8 @@ export async function syncPaymentToInstallments(
     saleId: string,
     amountReceived: number,
     gateway: string
-) {
-    if (!studentId || !saleId || amountReceived <= 0) return;
+): Promise<{ id: string } | null> {
+    if (!studentId || !saleId || amountReceived <= 0) return null;
 
     // 0. Update the sale's collected amount
     const { data: sale } = await (supabase
@@ -48,10 +48,11 @@ export async function syncPaymentToInstallments(
 
     if (fetchError) {
         console.error(`Error fetching pending payments:`, fetchError);
-        return;
+        return null;
     }
 
     let remainingToCover = amountReceived;
+    let mainPaymentRecord: { id: string } | null = null;
 
     // 2. Iterate and consume pending installments
     if (pendingPayments && pendingPayments.length > 0) {
@@ -60,7 +61,7 @@ export async function syncPaymentToInstallments(
 
             if (remainingToCover + 0.05 >= payment.amount) {
                 // Full consumption of this installment
-                const { error: updateError } = await (supabase
+                const { data, error: updateError } = await (supabase
                     .from('payments') as any)
                     .update({
                         status: 'paid',
@@ -68,12 +69,15 @@ export async function syncPaymentToInstallments(
                         paid_at: new Date().toISOString(),
                         updated_at: new Date().toISOString()
                     })
-                    .eq('id', payment.id);
+                    .eq('id', payment.id)
+                    .select('id')
+                    .single();
 
                 if (updateError) {
                     console.error(`Error marking installment ${payment.id} as paid:`, updateError);
                 } else {
                     remainingToCover -= payment.amount;
+                    if (!mainPaymentRecord) mainPaymentRecord = data;
                 }
             } else {
                 // Partial consumption: Split the installment
@@ -93,7 +97,7 @@ export async function syncPaymentToInstallments(
                 }
 
                 // B. Create a new PAID record for the amount actually received now
-                const { error: insertError } = await (supabase
+                const { data, error: insertError } = await (supabase
                     .from('payments') as any)
                     .insert({
                         student_id: studentId,
@@ -106,10 +110,14 @@ export async function syncPaymentToInstallments(
                         notes: `Pago parcial de cuota (Vence: ${payment.due_date})`,
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString()
-                    });
+                    })
+                    .select('id')
+                    .single();
 
                 if (insertError) {
                     console.error(`Error inserting partial paid record:`, insertError);
+                } else {
+                    if (!mainPaymentRecord) mainPaymentRecord = data;
                 }
 
                 remainingToCover = 0;
@@ -133,14 +141,19 @@ export async function syncPaymentToInstallments(
             updated_at: new Date().toISOString()
         };
 
-        const { error: insertError } = await (supabase
+        const { data, error: insertError } = await (supabase
             .from('payments') as any)
-            .insert(insertPayload);
+            .insert(insertPayload)
+            .select('id')
+            .single();
 
         if (insertError) {
             console.error(`Failed to insert visual history record for student ${studentId}:`, insertError);
         } else {
             console.log(`✅ Inserted surplus ledger record of ${remainingToCover}€ for student ${studentId} via ${gateway}`);
+            if (!mainPaymentRecord) mainPaymentRecord = data;
         }
     }
+
+    return mainPaymentRecord;
 }

@@ -55,21 +55,25 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+        console.log(`🔔 Recibido evento de Stripe: ${event.type} (${event.id})`);
         switch (event.type) {
             case 'checkout.session.completed':
+                console.log('Processing checkout.session.completed...');
                 await handleCheckoutCompleted(event.data.object);
                 break;
 
             case 'invoice.paid':
+                console.log('Processing invoice.paid...');
                 await handleInvoicePaid(event.data.object);
                 break;
 
             case 'charge.refunded':
+                console.log('Processing charge.refunded...');
                 await handleChargeRefunded(event.data.object);
                 break;
 
             default:
-                console.log(`Evento no manejado: ${event.type}`);
+                console.log(`Evento de Stripe no manejado explícitamente: ${event.type}`);
         }
 
         return NextResponse.json({ received: true });
@@ -219,7 +223,18 @@ async function handleCheckoutCompleted(session: any) {
 
     // 2.5 Sincronizar cuotas del alumno (Restricted to THIS sale)
     // This also updates amount_collected automatically
-    await syncPaymentToInstallments(supabase, studentId, sale.id, actualAmountPaid, 'stripe');
+    const updatedPayment = await syncPaymentToInstallments(supabase, studentId, sale.id, actualAmountPaid, 'stripe');
+
+    // Persist the Stripe Session ID or Payment Intent as external_id in the payment record for refunds
+    if (updatedPayment?.id) {
+        await supabase
+            .from('payments')
+            .update({
+                external_id: session.payment_intent || session.id,
+                metadata: { stripe_session_id: session.id }
+            })
+            .eq('id', updatedPayment.id);
+    }
 
     // 3. Actualizar estado del link
     await supabase
@@ -289,7 +304,18 @@ async function handleInvoicePaid(invoice: any) {
         : 2;
 
     // 3. syncPaymentToInstallments handles amount_collected and installments
-    await syncPaymentToInstallments(supabase, originalSale.student_id, originalSale.id, amountPaid, 'stripe');
+    const updatedPayment = await syncPaymentToInstallments(supabase, originalSale.student_id, originalSale.id, amountPaid, 'stripe');
+
+    // Persist the Charge/PaymentIntent from the invoice for refunds
+    if (updatedPayment?.id) {
+        await supabase
+            .from('payments')
+            .update({
+                external_id: invoice.charge || invoice.payment_intent,
+                metadata: { stripe_invoice_id: invoice.id }
+            })
+            .eq('id', updatedPayment.id);
+    }
 
 
     // 4. Crear comisiones para esta nueva cuota

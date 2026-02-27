@@ -63,27 +63,56 @@ export async function POST(request: NextRequest) {
         console.log(`Processing refund for sale ${saleId} (Gateway: ${sale.gateway})`);
 
         // 2. Process Refund based on Gateway
-        if (sale.transaction_id && (sale.transaction_id.startsWith('TEST_') || sale.transaction_id.startsWith('HP'))) {
-            // Mock refund for test transactions or Product IDs used as transactions in sandbox
-            console.log(`Skipping external API refund for test/stub transaction: ${sale.transaction_id}`);
-        } else if (sale.gateway === 'stripe') {
-            let paymentIntentId = sale.transaction_id;
-
-            // If ID starts with 'cs_', it's a Checkout Session. Retrieve the PaymentIntent.
-            if (paymentIntentId && paymentIntentId.startsWith('cs_')) {
-                console.log(`Resolving PaymentIntent from Checkout Session: ${paymentIntentId}`);
-                const stripe = getStripeClient();
-                const session = await stripe.checkout.sessions.retrieve(paymentIntentId);
-                if (!session.payment_intent) {
-                    return NextResponse.json({ error: 'Payment Intent not found for this session' }, { status: 400 });
-                }
-                paymentIntentId = session.payment_intent as string;
-            }
-
+        if (sale.gateway === 'stripe') {
             const stripe = getStripeClient();
-            await stripe.refunds.create({
-                payment_intent: paymentIntentId,
-            });
+
+            // Fetch all paid payments for this sale that have an external_id
+            const { data: paidRecords } = await supabase
+                .from('payments')
+                .select('*')
+                .eq('sale_id', saleId)
+                .eq('status', 'paid')
+                .not('external_id', 'is', null);
+
+            if (paidRecords && paidRecords.length > 0) {
+                console.log(`Found ${paidRecords.length} paid installments to refund via external_id`);
+                for (const record of paidRecords) {
+                    try {
+                        const idToRefund = record.external_id;
+                        console.log(`Refunding Stripe ID: ${idToRefund} (Payment ${record.id})`);
+
+                        if (idToRefund.startsWith('pi_')) {
+                            await stripe.refunds.create({ payment_intent: idToRefund });
+                        } else if (idToRefund.startsWith('ch_')) {
+                            await stripe.refunds.create({ charge: idToRefund });
+                        } else {
+                            console.warn(`Unknown Stripe ID format for refund: ${idToRefund}`);
+                        }
+                    } catch (err: any) {
+                        console.error(`Error refunding payment ${record.id}:`, err.message);
+                        // We continue with others if one fails? Or fail all? 
+                        // For now, let's just log and continue to try to refund as much as possible.
+                    }
+                }
+            } else {
+                // FALLBACK: Old logic using sale.transaction_id
+                console.log('No individual payment external_ids found. Falling back to sale.transaction_id logic.');
+                let paymentIntentId = sale.transaction_id;
+
+                if (!paymentIntentId || paymentIntentId.startsWith('TEST_')) {
+                    console.log('Skipping refund for test transaction');
+                } else {
+                    // Try to handle cs_ sessions if present in transaction_id
+                    if (paymentIntentId.startsWith('cs_')) {
+                        const session = await stripe.checkout.sessions.retrieve(paymentIntentId);
+                        paymentIntentId = session.payment_intent as string;
+                    }
+
+                    if (paymentIntentId) {
+                        await stripe.refunds.create({ payment_intent: paymentIntentId });
+                    }
+                }
+            }
 
         } else if (sale.gateway === 'hotmart') {
             const transactionId = sale.transaction_id;
