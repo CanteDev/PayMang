@@ -56,6 +56,8 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
     // Edit Sale
     const [editingSaleId, setEditingSaleId] = useState<string | null>(null);
     const [packs, setPacks] = useState<Pack[]>([]);
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [userId, setUserId] = useState<string | null>(null);
 
     const supabase = createClient();
 
@@ -80,6 +82,20 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
 
         if (salesData) {
             setSales(salesData);
+        }
+
+        // Get current user and role if not already loaded
+        if (!userRole) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                setUserId(user.id);
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', user.id)
+                    .single();
+                if (profile && (profile as any).role) setUserRole((profile as any).role);
+            }
         }
 
         // Fetch all payments for this student
@@ -529,34 +545,44 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                                             }>
                                                 {salePaid >= sale.total_amount ? 'Completado' : salePaid > 0 ? 'En Pago' : 'Pendiente'}
                                             </Badge>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-8 w-8 p-0"
-                                                onClick={() => startEditingSale(sale)}
-                                                title="Editar / Reestructurar Pack"
-                                            >
-                                                <Edit2 className="w-4 h-4 text-gray-500 hover:text-blue-600" />
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="h-8 w-8 p-0"
-                                                onClick={async () => {
-                                                    if (confirm('¿Estás seguro de que deseas ELIMINAR este pack y todas sus cuotas pendientes?')) {
-                                                        const { deleteSaleAction } = await import('@/app/actions/sales');
-                                                        const res = await deleteSaleAction(sale.id);
-                                                        if (res.success) {
-                                                            loadData();
-                                                        } else {
-                                                            alert('Error al eliminar el pack: ' + res.error);
-                                                        }
-                                                    }
-                                                }}
-                                                title="Eliminar Pack"
-                                            >
-                                                <X className="w-4 h-4 text-gray-500 hover:text-red-600" />
-                                            </Button>
+
+                                            {/* Edit/Delete only for Admins or the Closer who made the sale */}
+                                            {(userRole === 'admin' || (userRole === 'closer' && sale.metadata?.closer_id === userId)) ? (
+                                                <>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 w-8 p-0"
+                                                        onClick={() => startEditingSale(sale)}
+                                                        title="Editar / Reestructurar Pack"
+                                                    >
+                                                        <Edit2 className="w-4 h-4 text-gray-500 hover:text-blue-600" />
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 w-8 p-0"
+                                                        onClick={async () => {
+                                                            if (confirm('¿Estás seguro de que deseas ELIMINAR este pack y todas sus cuotas pendientes?')) {
+                                                                const { deleteSaleAction } = await import('@/app/actions/sales');
+                                                                const res = await deleteSaleAction(sale.id);
+                                                                if (res.success) {
+                                                                    loadData();
+                                                                } else {
+                                                                    alert('Error al eliminar el pack: ' + res.error);
+                                                                }
+                                                            }
+                                                        }}
+                                                        title="Eliminar Pack"
+                                                    >
+                                                        <X className="w-4 h-4 text-gray-500 hover:text-red-600" />
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <Badge variant="outline" className="text-[10px] text-gray-400 border-gray-200">
+                                                    Solo Lectura
+                                                </Badge>
+                                            )}
                                         </div>
                                     </div>
 
@@ -633,9 +659,6 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                                             <p className="text-sm text-gray-400 p-2 text-center text-italic">Ninguna cuota generada aún.</p>
                                         ) : (
                                             salePayments.map(payment => (
-
-
-
                                                 <div
                                                     key={payment.id}
                                                     className={`flex items-center justify-between p-3 rounded-lg border ${payment.status === 'paid' ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-100 opacity-80'
@@ -702,6 +725,6 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                     </div>
                 </div>
             </DialogContent>
-        </Dialog>
+        </Dialog >
     );
 }

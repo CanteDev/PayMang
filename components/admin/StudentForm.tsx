@@ -64,6 +64,7 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
     const [closers, setClosers] = useState<any[]>([]);
     const [setters, setSetters] = useState<any[]>([]);
     const [packs, setPacks] = useState<any[]>([]);
+    const [currentUser, setCurrentUser] = useState<any>(null);
 
     const supabase = createClient();
 
@@ -73,8 +74,26 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
             loadClosers();
             loadSetters();
             loadPacks();
+            loadCurrentUser();
         }
     }, [open]);
+
+    const loadCurrentUser = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            setCurrentUser(user);
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single();
+
+            // If it's a closer creating a new student, auto-assign closerId
+            if (!student && (profile as any)?.role === 'closer') {
+                setCloserId(user.id);
+            }
+        }
+    };
 
     const loadPacks = async () => {
         const { data } = await supabase
