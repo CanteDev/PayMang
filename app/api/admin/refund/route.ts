@@ -144,16 +144,20 @@ export async function POST(request: NextRequest) {
 
         const isIndividual = !!paymentId;
 
-        // For individual payment refunds: check if the specific payment is already refunded
-        // For full-sale refunds: check if the whole sale is already refunded
+        // Fetch individual payment details if needed
+        let payment = null;
         if (isIndividual) {
-            const { data: paymentCheck } = await supabase
+            const { data: p, error: pError } = await supabase
                 .from('payments')
-                .select('status')
+                .select('*')
                 .eq('id', paymentId)
                 .single();
+            if (pError || !p) {
+                return NextResponse.json({ error: 'Pago no encontrado' }, { status: 404 });
+            }
+            payment = p;
 
-            if (paymentCheck?.status === 'refunded') {
+            if (p.status === 'refunded') {
                 return NextResponse.json({ error: 'Este pago ya ha sido reembolsado' }, { status: 400 });
             }
         } else {
@@ -161,6 +165,11 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ error: 'La venta ya está reembolsada' }, { status: 400 });
             }
         }
+
+        // Determine effective gateway (payment-specific takes priority for individual refunds)
+        const effectiveGateway = (isIndividual && payment?.method && payment.method !== 'manual')
+            ? payment.method
+            : sale.gateway;
 
         // Validate 14-day refund window
         const saleDate = new Date(sale.created_at);
@@ -171,14 +180,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Refund period expired (14 days)' }, { status: 400 });
         }
 
-        console.log(`Processing ${isIndividual ? 'individual payment' : 'full sale'} refund (Gateway: ${sale.gateway})`);
+        console.log(`Processing ${isIndividual ? 'individual payment' : 'full sale'} refund (Effective Gateway: ${effectiveGateway})`);
 
         let refundCount = 0;
         let refundErrors: string[] = [];
         const refundedPaymentIds: string[] = [];
 
-        // 2. Stripe refund flow
-        if (sale.gateway === 'stripe') {
+        // 2. Refund flow based on effective gateway
+        if (effectiveGateway === 'stripe') {
+
             const stripe = await getStripeClient();
 
             // Determine which payments to process
@@ -255,15 +265,16 @@ export async function POST(request: NextRequest) {
                 }, { status: 400 });
             }
 
-        } else if (sale.gateway === 'hotmart') {
+        } else if (effectiveGateway === 'hotmart') {
             if (isIndividual) {
                 return NextResponse.json({ error: 'El reembolso individual no está disponible para Hotmart' }, { status: 400 });
             }
             await refundHotmartSale(sale.transaction_id);
             refundCount = 1;
         } else {
-            return NextResponse.json({ error: `Refund not supported for gateway: ${sale.gateway}` }, { status: 400 });
+            return NextResponse.json({ error: `Refund not supported for gateway: ${effectiveGateway}` }, { status: 400 });
         }
+
 
         // 3. Update database only if at least one refund succeeded
         if (refundCount > 0) {
