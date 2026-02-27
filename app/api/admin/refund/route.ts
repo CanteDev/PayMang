@@ -80,15 +80,14 @@ async function refundStripeRecord(stripe: Stripe, record: any): Promise<boolean>
             await stripe.refunds.create({ charge: inv.charge as string });
             return true;
         }
-        // Fallback for Test Clock invoices: search charges for this customer filtered by invoice ID
-        // Charges always have the `invoice` field populated, even for Test Clock payments
-        const stripeCustomerId = (inv as any).customer;
-        const chargesForInvoice = await stripe.charges.list({
-            limit: 20,
-            ...(stripeCustomerId ? { customer: stripeCustomerId } : {})
+        // Fallback for Test Clock invoices: use Stripe's server-side invoice filter
+        // charges.list supports { invoice: 'in_...' } as a direct API parameter
+        const chargesForInvoice = await (stripe.charges as any).list({
+            limit: 10,
+            invoice: idToRefund
         });
-        const matchingCharge = chargesForInvoice.data.find(
-            (ch: any) => ch.invoice === idToRefund && ch.status === 'succeeded' && !ch.refunded
+        const matchingCharge = (chargesForInvoice.data as any[]).find(
+            (ch: any) => ch.status === 'succeeded' && !ch.refunded
         );
         if (matchingCharge) {
             await stripe.refunds.create({ charge: matchingCharge.id });
