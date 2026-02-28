@@ -62,7 +62,6 @@ export default function AddExpenseDialog({
             setAmount(expenseToEdit.amount.toString());
             setCategory(expenseToEdit.category);
             setType(expenseToEdit.type);
-            setRecurring(expenseToEdit.recurring);
             setNotes(expenseToEdit.notes || '');
         } else {
             // Reset form
@@ -72,7 +71,6 @@ export default function AddExpenseDialog({
             setAmount('');
             setCategory('');
             setType('variable');
-            setRecurring(false);
             setNotes('');
         }
     }, [expenseToEdit, open]);
@@ -88,6 +86,12 @@ export default function AddExpenseDialog({
         setLoading(true);
 
         try {
+            // Determinamos si es recurrente automáticamente
+            // Si NO tiene fecha fin -> es recurrente indefinido
+            // Si TIENE fecha fin, y es DISTINTA a la de inicio -> es recurrente dentro de ese rango
+            // Si la fecha fin es LA MISMA que la inicio -> NO es recurrente, es un pago único de un solo día (raro, pero válido).
+            const isRecurring = !endDate || startDate !== endDate;
+
             const expenseData = {
                 start_date: startDate,
                 end_date: endDate || null,
@@ -95,7 +99,7 @@ export default function AddExpenseDialog({
                 amount: parseFloat(amount),
                 category,
                 type,
-                recurring,
+                recurring: isRecurring,
                 notes: notes || null
             };
 
@@ -145,13 +149,13 @@ export default function AddExpenseDialog({
                             />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="end_date">Fecha Fin {recurring && '(Opcional)'}</Label>
+                            <Label htmlFor="end_date">Fecha Fin (Opcional)</Label>
                             <Input
                                 id="end_date"
                                 type="date"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                placeholder="Sin fecha fin"
+                                placeholder="Indefinido"
                             />
                         </div>
                     </div>
@@ -212,16 +216,7 @@ export default function AddExpenseDialog({
                         </div>
                     </div>
 
-                    <div className="flex items-center space-x-2">
-                        <Checkbox
-                            id="recurring"
-                            checked={recurring}
-                            onCheckedChange={(checked) => setRecurring(checked as boolean)}
-                        />
-                        <Label htmlFor="recurring" className="font-normal cursor-pointer">
-                            Es un gasto recurrente (mensual)
-                        </Label>
-                    </div>
+                    {/* Checkbox Recurring eliminado. Se infiere de Fecha Fin */}
 
                     <div className="grid gap-2">
                         <Label htmlFor="notes">Notas (Opcional)</Label>

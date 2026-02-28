@@ -173,16 +173,8 @@ export default function ExpensesTable() {
                 // Si el gasto está activo en este mes iterado
                 if (eStart <= monthEnd && eEnd >= monthStart) {
                     const amount = Number(e.amount) || 0;
-                    if (e.recurring) {
-                        if (e.type === 'fijo') { monthlyFixed += amount; totalFixed += amount; }
-                        if (e.type === 'variable') { monthlyVariable += amount; totalVariable += amount; }
-                    } else {
-                        // Gasto único, solo se suma si su fecha de inicio cae dentro de ESTE mes
-                        if (eStart >= monthStart && eStart <= monthEnd) {
-                            if (e.type === 'fijo') { monthlyFixed += amount; totalFixed += amount; }
-                            if (e.type === 'variable') { monthlyVariable += amount; totalVariable += amount; }
-                        }
-                    }
+                    if (e.type === 'fijo') { monthlyFixed += amount; totalFixed += amount; }
+                    if (e.type === 'variable') { monthlyVariable += amount; totalVariable += amount; }
                 }
             });
 
@@ -251,19 +243,19 @@ export default function ExpensesTable() {
                 <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
                     {/* Period Filters */}
                     <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-gray-500" />
+                        <Calendar className="w-4 h-4 text-gray-500 hidden sm:block" />
                         <Input
                             type="date"
                             value={from}
                             onChange={(e) => setFrom(e.target.value)}
-                            className="h-9 w-[130px] text-sm"
+                            className="h-9 w-[145px] sm:w-[155px] text-sm bg-white"
                         />
                         <span className="text-gray-400 text-sm">a</span>
                         <Input
                             type="date"
                             value={to}
                             onChange={(e) => setTo(e.target.value)}
-                            className="h-9 w-[130px] text-sm"
+                            className="h-9 w-[145px] sm:w-[155px] text-sm bg-white"
                         />
                     </div>
 
@@ -382,14 +374,14 @@ export default function ExpensesTable() {
                                     </TableCell>
                                     <TableCell>
                                         {expense.end_date ? new Date(expense.end_date).toLocaleDateString() : (
-                                            expense.recurring ? <span className="text-gray-400 italic">Indefinido</span> : '-'
+                                            <span className="text-gray-400 italic">Indefinido</span>
                                         )}
                                     </TableCell>
                                     <TableCell className="font-medium">
                                         {expense.concept}
-                                        {expense.recurring && (
+                                        {(!expense.end_date) && (
                                             <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1 py-0.5 rounded">
-                                                Recurrente
+                                                Indefinido
                                             </span>
                                         )}
                                         {expense.notes && (

@@ -76,27 +76,20 @@ export async function getDashboardMetrics(startDate?: string, endDate?: string) 
         const eEnd = e.end_date ? new Date(e.end_date) : new Date(2100, 0, 1);
         const amount = Number(e.amount) || 0;
 
-        if (e.recurring) {
-            // For recurring, count how many months the expense is active within [start, end]
-            // Defaulting iterStart to eStart if no startDate is provided, otherwise evaluate the intersection
-            let iterStart = startDate ? start : new Date(Math.max(start.getTime(), eStart.getTime()));
-            let iterEnd = end;
+        // Bucle mes a mes dentro del rango del filtro
+        let iterStart = startDate ? start : new Date(Math.max(start.getTime(), eStart.getTime()));
+        let iterEnd = end;
 
-            let currentDate = new Date(iterStart.getFullYear(), iterStart.getMonth(), 1);
-            let endMonth = new Date(iterEnd.getFullYear(), iterEnd.getMonth(), 1);
+        let currentDate = new Date(iterStart.getFullYear(), iterStart.getMonth(), 1);
+        let endMonth = new Date(iterEnd.getFullYear(), iterEnd.getMonth(), 1);
 
-            while (currentDate <= endMonth) {
-                const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-                if (eStart <= monthEnd && eEnd >= currentDate) {
-                    totalExpenses += amount;
-                }
-                currentDate.setMonth(currentDate.getMonth() + 1);
-            }
-        } else {
-            // One-time expense
-            if (eStart >= start && eStart <= end) {
+        while (currentDate <= endMonth) {
+            const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+            // Solo si el gasto tiene alguna actividad en este mes
+            if (eStart <= monthEnd && eEnd >= currentDate) {
                 totalExpenses += amount;
             }
+            currentDate.setMonth(currentDate.getMonth() + 1);
         }
     });
 
