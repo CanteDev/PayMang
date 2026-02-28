@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Users, Search, User, Filter, Calendar, Edit2 } from 'lucide-react';
 import StudentForm from '@/components/admin/StudentForm';
 import StudentPaymentDetails from '@/components/admin/StudentPaymentDetails';
+import { MultiSelect } from '@/components/ui/MultiSelect';
 
 interface Student {
     id: string;
@@ -46,8 +47,8 @@ export default function AdminStudentsPage() {
     // Filters
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedMonth, setSelectedMonth] = useState<string>('all');
-    const [statusFilter, setStatusFilter] = useState<string>('all');
-    const [coachFilter, setCoachFilter] = useState<string>('all');
+    const [statusFilter, setStatusFilter] = useState<string[]>([]);
+    const [coachFilter, setCoachFilter] = useState<string[]>([]);
     const [morosoFilter, setMorosoFilter] = useState<boolean>(false);
 
     const supabase = createClient();
@@ -64,7 +65,8 @@ export default function AdminStudentsPage() {
         const { data } = await supabase
             .from('profiles')
             .select('id, full_name')
-            .in('role', ['coach', 'closer', 'setter']) // Include all potential agents who might be assigned
+            .eq('role', 'coach')
+            .eq('is_active', true)
             .order('full_name');
         setCoaches(data || []);
     };
@@ -92,16 +94,21 @@ export default function AdminStudentsPage() {
             }
 
             // Status Filter
-            if (statusFilter !== 'all') {
-                query = query.eq('status', statusFilter);
+            if (statusFilter.length > 0) {
+                query = query.in('status', statusFilter);
             }
 
             // Coach Filter
-            if (coachFilter !== 'all') {
-                if (coachFilter === 'unassigned') {
+            if (coachFilter.length > 0) {
+                const hasUnassigned = coachFilter.includes('unassigned');
+                const coachIds = coachFilter.filter(id => id !== 'unassigned');
+
+                if (hasUnassigned && coachIds.length > 0) {
+                    query = query.or(`assigned_coach_id.in.(${coachIds.join(',')}),assigned_coach_id.is.null`);
+                } else if (hasUnassigned) {
                     query = query.is('assigned_coach_id', null);
                 } else {
-                    query = query.eq('assigned_coach_id', coachFilter);
+                    query = query.in('assigned_coach_id', coachIds);
                 }
             }
 
@@ -239,36 +246,34 @@ export default function AdminStudentsPage() {
                             </div>
 
                             {/* Coach Filter */}
-                            <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 text-gray-500" />
-                                <select
-                                    value={coachFilter}
-                                    onChange={(e) => setCoachFilter(e.target.value)}
-                                    className="h-9 rounded-md border text-sm bg-white px-2 py-1 max-w-[160px] focus:ring-2 focus:ring-slate-200 focus:border-slate-400 outline-none"
-                                >
-                                    <option value="all">Todos los coaches</option>
-                                    <option value="unassigned">Sin asignar</option>
-                                    {coaches.map(coach => (
-                                        <option key={coach.id} value={coach.id}>
-                                            {coach.full_name}
-                                        </option>
-                                    ))}
-                                </select>
+                            <div className="flex items-center gap-2 w-full md:w-[200px]">
+                                <MultiSelect
+                                    options={[
+                                        { label: 'Sin asignar', value: 'unassigned' },
+                                        ...coaches.map(c => ({ label: c.full_name, value: c.id }))
+                                    ]}
+                                    selected={coachFilter}
+                                    onChange={setCoachFilter}
+                                    placeholder="Todos los coaches"
+                                    icon={<User className="w-4 h-4" />}
+                                />
                             </div>
 
                             {/* Status Filter */}
-                            <div className="flex items-center gap-2">
-                                <Filter className="w-4 h-4 text-gray-500" />
-                                <select
-                                    value={statusFilter}
-                                    onChange={(e) => setStatusFilter(e.target.value)}
-                                    className="h-9 rounded-md border text-sm bg-white px-2 py-1 max-w-[160px] focus:ring-2 focus:ring-slate-200 focus:border-slate-400 outline-none"
-                                >
-                                    <option value="all">Todos los estados</option>
-                                    <option value="active">Activo</option>
-                                    <option value="inactive">Inactivo</option>
-                                    <option value="paused">Pausado</option>
-                                </select>
+                            <div className="flex items-center gap-2 w-full md:w-[180px]">
+                                <MultiSelect
+                                    options={[
+                                        { label: 'Activo', value: 'active' },
+                                        { label: 'Inactivo', value: 'inactive' },
+                                        { label: 'Pausado', value: 'paused' },
+                                        { label: 'Finalizado', value: 'finished' },
+                                        { label: 'Impago', value: 'defaulted' }
+                                    ]}
+                                    selected={statusFilter}
+                                    onChange={setStatusFilter}
+                                    placeholder="Todos los estados"
+                                    icon={<Filter className="w-4 h-4" />}
+                                />
                             </div>
 
                             {/* Moroso Filter */}

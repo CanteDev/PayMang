@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DollarSign, Search, CreditCard, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MultiSelect } from '@/components/ui/MultiSelect';
 
 interface Transaction {
     id: string;
@@ -25,7 +26,7 @@ export default function AdminPaymentsPage() {
     const [sales, setSales] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [gatewayFilter, setGatewayFilter] = useState('all');
+    const [gatewayFilter, setGatewayFilter] = useState<string[]>([]);
 
     // Date Filters
     const now = new Date();
@@ -90,12 +91,20 @@ export default function AdminPaymentsPage() {
                 .order('paid_at', { ascending: false });
 
             // Apply filters
-            if (gatewayFilter === 'manual') {
-                // Filter by manual methods
-                query = query.not('method', 'in', '("stripe","hotmart","sequra","klarna")');
-            } else if (gatewayFilter !== 'all') {
-                // Filter by specific gateway
-                query = query.eq('method', gatewayFilter);
+            if (gatewayFilter.length > 0) {
+                const isManual = gatewayFilter.includes('manual');
+                const specificGateways = gatewayFilter.filter(g => g !== 'manual');
+
+                if (isManual && specificGateways.length > 0) {
+                    // Filter by manual + specific gateways
+                    // This is a bit tricky with Supabase .in() and .not().in()
+                    // Simplest way is to use .or()
+                    query = query.or(`method.in.(${specificGateways.join(',')}),not.method.in.("stripe","hotmart","sequra","klarna")`);
+                } else if (isManual) {
+                    query = query.not('method', 'in', '("stripe","hotmart","sequra","klarna")');
+                } else {
+                    query = query.in('method', specificGateways);
+                }
             }
 
             // Apply date filters
@@ -248,19 +257,19 @@ export default function AdminPaymentsPage() {
                                 className="pl-9"
                             />
                         </div>
-                        <div className="flex items-center space-x-2">
-                            <Filter className="w-4 h-4 text-gray-500" />
-                            <select
-                                value={gatewayFilter}
-                                onChange={(e) => setGatewayFilter(e.target.value)}
-                                className="h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
-                            >
-                                <option value="all">Todas las pasarelas</option>
-                                <option value="stripe">Stripe</option>
-                                <option value="hotmart">Hotmart</option>
-                                <option value="sequra">SeQura</option>
-                                <option value="manual">Manual</option>
-                            </select>
+                        <div className="flex items-center space-x-2 w-full md:w-[200px]">
+                            <MultiSelect
+                                options={[
+                                    { label: 'Stripe', value: 'stripe' },
+                                    { label: 'Hotmart', value: 'hotmart' },
+                                    { label: 'SeQura', value: 'sequra' },
+                                    { label: 'Manual', value: 'manual' }
+                                ]}
+                                selected={gatewayFilter}
+                                onChange={setGatewayFilter}
+                                placeholder="Todas las pasarelas"
+                                icon={<Filter className="w-4 h-4 text-gray-500" />}
+                            />
                         </div>
 
                         <div className="flex flex-col md:flex-row items-center gap-2">
