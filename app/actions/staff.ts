@@ -162,3 +162,39 @@ export async function updateStaff(prevState: any, formData: FormData) {
         return { error: 'Error del servidor: ' + error.message };
     }
 }
+
+export async function deleteStaff(id: string) {
+    if (!id) {
+        return { error: 'ID de usuario no proporcionado' };
+    }
+
+    try {
+        const supabase = createClient(supabaseUrl, serviceRoleKey, {
+            auth: {
+                autoRefreshToken: false,
+                persistSession: false
+            }
+        });
+
+        // 1. Delete from Supabase Auth (Admin API)
+        // Note: The 'profiles' table has 'ON DELETE CASCADE' from auth.users(id)
+        // If there are 'ON DELETE RESTRICT' constraints (like in commissions), 
+        // this call will fail, which is good to protect data integrity.
+        const { error: authError } = await supabase.auth.admin.deleteUser(id);
+
+        if (authError) {
+            console.error('Error deleting auth user:', authError);
+            if (authError.message.includes('foreign key constraint')) {
+                return { error: 'No se puede eliminar el usuario porque tiene datos asociados (comisiones, ventas, etc.). Desactívalo en su lugar.' };
+            }
+            return { error: 'Error al eliminar usuario: ' + authError.message };
+        }
+
+        revalidatePath('/admin/staff');
+        return { success: true, message: 'Usuario eliminado correctamente' };
+
+    } catch (error: any) {
+        console.error('Server Action Error:', error);
+        return { error: 'Error del servidor: ' + error.message };
+    }
+}

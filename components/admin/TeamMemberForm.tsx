@@ -12,9 +12,9 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
-import { UserPlus, Edit2 } from 'lucide-react';
+import { UserPlus, Edit2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { inviteStaff, updateStaff } from '@/app/actions/staff';
+import { inviteStaff, updateStaff, deleteStaff } from '@/app/actions/staff';
 
 interface TeamMemberFormProps {
     member?: {
@@ -51,6 +51,14 @@ export default function TeamMemberForm({ member, trigger, onSuccess }: TeamMembe
             }
         }
     }, [open, member]);
+
+    const resetForm = () => {
+        setEmail('');
+        setFullName('');
+        setRole('coach');
+        setIsActive(true);
+        setError(null);
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -90,12 +98,30 @@ export default function TeamMemberForm({ member, trigger, onSuccess }: TeamMembe
         }
     };
 
-    const resetForm = () => {
-        setEmail('');
-        setFullName('');
-        setRole('coach');
-        setIsActive(true);
-        setError(null);
+    const handleDelete = async () => {
+        if (!member) return;
+
+        const confirm = window.confirm(
+            `¿Estás seguro de que deseas eliminar a ${member.full_name}? esta acción borrará su usuario de acceso y su perfil. Solo se permite si el usuario no tiene datos asociados.`
+        );
+
+        if (!confirm) return;
+
+        setLoading(true);
+        try {
+            const result = await deleteStaff(member.id);
+            if (result.error) {
+                toast.error(result.error);
+            } else {
+                toast.success('Usuario eliminado correctamente');
+                setOpen(false);
+                if (onSuccess) onSuccess();
+            }
+        } catch (err) {
+            toast.error('Error al eliminar usuario');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -194,7 +220,19 @@ export default function TeamMemberForm({ member, trigger, onSuccess }: TeamMembe
                             </div>
                         )}
 
-                        <div className="flex justify-end pt-2">
+                        <div className="flex justify-between items-center pt-2">
+                            {member ? (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="text-red-600 border-red-200 hover:bg-red-50"
+                                    onClick={handleDelete}
+                                    disabled={loading}
+                                >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Eliminar
+                                </Button>
+                            ) : <div></div>}
                             <Button type="submit" disabled={loading}>
                                 {loading
                                     ? (member ? 'Guardando...' : 'Enviando...')
