@@ -31,18 +31,23 @@ export async function inviteStaff(prevState: any, formData: FormData) {
 
         // 1. Invite User via Auth Admin API
         const headersList = require('next/headers').headers();
-        const host = headersList.get('host');
+        const host = headersList.get('x-forwarded-host') || headersList.get('host');
         const protocol = host?.includes('localhost') ? 'http' : 'https';
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')
-            ? process.env.NEXT_PUBLIC_APP_URL
-            : `${protocol}://${host}`;
+        const appUrl = `${protocol}://${host}`;
+
+        console.log('Generating invitation for host:', host);
+
+        // Invitation logic with explicit redirect
+        const callbackUrl = `${appUrl}/api/auth/callback`;
+        const nextParam = encodeURIComponent('/update-password');
+        const redirectTo = `${callbackUrl}?next=${nextParam}`;
 
         const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(email, {
             data: {
                 full_name: fullName,
                 role: role,
             },
-            redirectTo: `${appUrl}/api/auth/callback?next=/update-password`,
+            redirectTo: redirectTo,
         });
 
         if (authError) {
