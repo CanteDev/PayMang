@@ -51,17 +51,6 @@ export async function getDashboardMetrics(startDate?: string, endDate?: string) 
         })
         .reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
 
-    const pendingPayouts = (commissionsData as any[])
-        .filter(c => {
-            // Only include commissions that are actually waiting to be paid
-            const isActionable = ['pending', 'validated', 'incidence'].includes(c.status);
-            if (!isActionable) return false;
-
-            const cDate = new Date(c.created_at);
-            return cDate >= start && cDate <= end;
-        })
-        .reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
-
     // 3. Expenses: Sum of all expenses overlapping with the period
     const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
@@ -73,41 +62,33 @@ export async function getDashboardMetrics(startDate?: string, endDate?: string) 
     }
 
     let totalExpenses = 0;
-    let burnRate = 0;
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
     (expensesData as any[]).forEach(e => {
         const eStart = new Date(e.start_date);
         const eEnd = e.end_date ? new Date(e.end_date) : new Date(2100, 0, 1);
         const amount = Number(e.amount) || 0;
 
-        // --- Period Expenses Calculation (Within filters) ---
-        // We calculate what part of this expense belongs to the filtered [start, end]
         if (e.recurring) {
-            // Count months in period [start, end] that overlap with [eStart, eEnd]
-            const overlapStart = new Date(Math.max(start.getTime(), eStart.getTime()));
-            const overlapEnd = new Date(Math.min(end.getTime(), eEnd.getTime(), now.getTime()));
+            // For recurring, count how many months the expense is active within [start, end]
+            // Defaulting iterStart to eStart if no startDate is provided, otherwise evaluate the intersection
+            let iterStart = startDate ? start : new Date(Math.max(start.getTime(), eStart.getTime()));
+            let iterEnd = end;
 
-            if (overlapStart <= overlapEnd) {
-                const months = (overlapEnd.getFullYear() - overlapStart.getFullYear()) * 12 +
-                    (overlapEnd.getMonth() - overlapStart.getMonth()) + 1;
-                if (months > 0) totalExpenses += amount * months;
+            let currentDate = new Date(iterStart.getFullYear(), iterStart.getMonth(), 1);
+            let endMonth = new Date(iterEnd.getFullYear(), iterEnd.getMonth(), 1);
+
+            while (currentDate <= endMonth) {
+                const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+                if (eStart <= monthEnd && eEnd >= currentDate) {
+                    totalExpenses += amount;
+                }
+                currentDate.setMonth(currentDate.getMonth() + 1);
             }
         } else {
-            // One-time: Does it fall in the period?
+            // One-time expense
             if (eStart >= start && eStart <= end) {
                 totalExpenses += amount;
             }
-        }
-
-        // --- Burn Rate (Current Month Fixed) ---
-        if (e.recurring) {
-            const isActiveThisMonth = eStart <= currentMonthEnd && eEnd >= currentMonthStart;
-            if (isActiveThisMonth) burnRate += amount;
-        } else {
-            if (eStart >= currentMonthStart && eStart <= currentMonthEnd) burnRate += amount;
         }
     });
 
@@ -116,9 +97,9 @@ export async function getDashboardMetrics(startDate?: string, endDate?: string) 
 
     return {
         totalRevenue,
-        netCashFlow,
-        pendingPayouts,
-        burnRate
+        paidCommissions,
+        periodExpenses: totalExpenses,
+        netCashFlow
     };
 
 }

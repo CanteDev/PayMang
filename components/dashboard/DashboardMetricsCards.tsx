@@ -6,9 +6,9 @@ import { DollarSign, TrendingUp, Clock, Flame } from 'lucide-react';
 interface MetricsProps {
     metrics: {
         totalRevenue: number;
+        paidCommissions: number;
+        periodExpenses: number;
         netCashFlow: number;
-        pendingPayouts: number;
-        burnRate: number;
     } | null;
 }
 
@@ -17,40 +17,40 @@ export default function DashboardMetricsCards({ metrics }: MetricsProps) {
         return <div className="text-gray-500">No hay datos disponibles</div>;
     }
 
-    const { totalRevenue, netCashFlow, pendingPayouts, burnRate } = metrics;
+    const { totalRevenue, paidCommissions, periodExpenses, netCashFlow } = metrics;
 
     const cards = [
         {
-            title: 'Ingresos Totales (Bruto)',
+            title: 'Ingresos (Bruto)',
             value: totalRevenue,
             icon: DollarSign,
             color: 'text-green-600',
             bgColor: 'bg-green-100',
-            description: 'Total de ventas de todas las pasarelas'
+            description: 'Pagos cobrados en este periodo'
+        },
+        {
+            title: 'Comisiones Pagadas',
+            value: paidCommissions,
+            icon: TrendingUp,
+            color: 'text-orange-600',
+            bgColor: 'bg-orange-100',
+            description: 'Pagadas a agentes en este periodo'
+        },
+        {
+            title: 'Gastos del Periodo',
+            value: periodExpenses,
+            icon: Flame,
+            color: 'text-red-600',
+            bgColor: 'bg-red-100',
+            description: 'Fijos y Variables prorrateados'
         },
         {
             title: 'Flujo de Caja Neto',
             value: netCashFlow,
-            icon: TrendingUp,
+            icon: DollarSign,
             color: 'text-blue-600',
             bgColor: 'bg-blue-100',
-            description: 'Ingresos - Comisiones Pagadas - Gastos'
-        },
-        {
-            title: 'Pagos Pendientes',
-            value: pendingPayouts,
-            icon: Clock,
-            color: 'text-yellow-600',
-            bgColor: 'bg-yellow-100',
-            description: 'Comisiones Validadas o Pendientes'
-        },
-        {
-            title: 'Gastos del Mes',
-            value: burnRate,
-            icon: Flame,
-            color: 'text-red-600',
-            bgColor: 'bg-red-100',
-            description: 'Fijos y Variables de este mes'
+            description: 'Ingresos - Comisiones - Gastos'
         }
     ];
 
