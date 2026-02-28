@@ -14,6 +14,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Plus, Edit, Trash2, TrendingUp, Filter, BarChart, Calendar, Search } from 'lucide-react';
+import {
+    LineChart,
+    Line,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    Legend,
+    ResponsiveContainer
+} from 'recharts';
 import { toast } from 'sonner';
 import { deleteExpense } from '@/app/actions/expenses';
 import AddExpenseDialog from './AddExpenseDialog';
@@ -23,10 +33,18 @@ export default function ExpensesTable() {
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // Default dates (Current Month)
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const defaultFrom = `${currentYear}-${pad(currentMonth + 1)}-01`;
+    const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const defaultTo = `${currentYear}-${pad(currentMonth + 1)}-${pad(lastDay)}`;
+
     // Filters
-    const [selectedMonth, setSelectedMonth] = useState<string>(
-        `${new Date().getFullYear()}-${(new Date().getMonth() + 1).toString().padStart(2, '0')}`
-    );
+    const [from, setFrom] = useState<string>(defaultFrom);
+    const [to, setTo] = useState<string>(defaultTo);
     const [typeFilter, setTypeFilter] = useState<'all' | 'fijo' | 'variable'>('all');
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -44,24 +62,10 @@ export default function ExpensesTable() {
                 .select('*')
                 .order('start_date', { ascending: false });
 
-            // Date Filter (Month)
-            if (selectedMonth !== 'all') {
-                const [year, month] = selectedMonth.split('-');
-                const startDateStr = new Date(parseInt(year), parseInt(month) - 1, 1).toISOString().split('T')[0];
-                const endDateStr = new Date(parseInt(year), parseInt(month), 0).toISOString().split('T')[0];
-
-                // Logic:
-                // 1. Expense started before or during the month
-                // 2. AND (Expense has no end date OR Expense ends after or during the month)
-
-                // Since Supabase doesn't easily support complex OR filtering on date ranges mixed with other conditions in one go efficiently without RPC or complex logical operators in client, 
-                // we might fetch a bit more and filter clientside, OR use 'or' syntax.
-
-                // Let's rely on client side filtering for the complex date range overlap to be accurate and simple, 
-                // as expenses volume is likely low. So we just fetch all (or maybe just start_date <= month_end) and then filter.
-
-                // Optimization: Fetch expenses where start_date <= month_end
-                query = query.lte('start_date', endDateStr);
+            // Date Filter (Range Optimization)
+            if (from && to) {
+                // Optimization: Fetch expenses where start_date <= to
+                query = query.lte('start_date', to);
             }
 
             // Type Filter
@@ -75,21 +79,18 @@ export default function ExpensesTable() {
 
             // Client-side filtering for robust date range overlap
             let filtered: Expense[] = data || [];
-            if (selectedMonth !== 'all') {
-                const [year, month] = selectedMonth.split('-');
-                const monthStart = new Date(parseInt(year), parseInt(month) - 1, 1);
-                const monthEnd = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
+            if (from && to) {
+                const rangeStart = new Date(from);
+                const rangeEnd = new Date(to);
+                rangeEnd.setHours(23, 59, 59);
 
                 filtered = filtered.filter(e => {
-                    const start = new Date(e.start_date);
-                    const end = e.end_date ? new Date(e.end_date) : null;
+                    const eStart = new Date(e.start_date);
+                    const eEnd = e.end_date ? new Date(e.end_date) : new Date(2100, 0, 1);
 
                     // Check overlap
-                    // Start must be before or equal to Month End
-                    if (start > monthEnd) return false;
-                    // End (if exists) must be after or equal to Month Start
-                    if (end && end < monthStart) return false;
-
+                    if (eStart > rangeEnd) return false;
+                    if (eEnd < rangeStart) return false;
                     return true;
                 });
             }
@@ -105,7 +106,7 @@ export default function ExpensesTable() {
 
     useEffect(() => {
         loadExpenses();
-    }, [selectedMonth, typeFilter]);
+    }, [from, to, typeFilter]);
 
     const handleDelete = async (id: string) => {
         if (!confirm('¿Estás seguro de que quieres eliminar este gasto?')) return;
@@ -144,33 +145,64 @@ export default function ExpensesTable() {
         );
     });
 
-    // Calculate totals based on filtered expenses
-    const totalFixed = filteredExpenses
-        .filter(e => e.type === 'fijo')
-        .reduce((sum, e) => sum + e.amount, 0);
+    // Calculate totals and chart data based on Exact Date Range prorating
+    let totalFixed = 0;
+    let totalVariable = 0;
+    const chartData: any[] = [];
 
-    const totalVariable = filteredExpenses
-        .filter(e => e.type === 'variable')
-        .reduce((sum, e) => sum + e.amount, 0);
+    if (from && to) {
+        const start = new Date(from);
+        const end = new Date(to);
+
+        let currentIter = new Date(start.getFullYear(), start.getMonth(), 1);
+        const endLimit = new Date(end.getFullYear(), end.getMonth(), 1);
+
+        while (currentIter <= endLimit) {
+            const currYear = currentIter.getFullYear();
+            const currMonth = currentIter.getMonth();
+            const monthStart = new Date(currYear, currMonth, 1);
+            const monthEnd = new Date(currYear, currMonth + 1, 0);
+
+            let monthlyFixed = 0;
+            let monthlyVariable = 0;
+
+            filteredExpenses.forEach(e => {
+                const eStart = new Date(e.start_date);
+                const eEnd = e.end_date ? new Date(e.end_date) : new Date(2100, 0, 1);
+
+                // Si el gasto está activo en este mes iterado
+                if (eStart <= monthEnd && eEnd >= monthStart) {
+                    const amount = Number(e.amount) || 0;
+                    if (e.recurring) {
+                        if (e.type === 'fijo') { monthlyFixed += amount; totalFixed += amount; }
+                        if (e.type === 'variable') { monthlyVariable += amount; totalVariable += amount; }
+                    } else {
+                        // Gasto único, solo se suma si su fecha de inicio cae dentro de ESTE mes
+                        if (eStart >= monthStart && eStart <= monthEnd) {
+                            if (e.type === 'fijo') { monthlyFixed += amount; totalFixed += amount; }
+                            if (e.type === 'variable') { monthlyVariable += amount; totalVariable += amount; }
+                        }
+                    }
+                }
+            });
+
+            chartData.push({
+                name: monthStart.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
+                Fijo: monthlyFixed,
+                Variable: monthlyVariable,
+                Total: monthlyFixed + monthlyVariable
+            });
+
+            currentIter.setMonth(currentIter.getMonth() + 1);
+        }
+    }
 
     const total = totalFixed + totalVariable;
 
-    // Generate available months (Last 12)
-    const availableMonths = Array.from({ length: 12 }, (_, i) => {
-        const d = new Date();
-        d.setMonth(d.getMonth() - i);
-        d.setDate(1);
-        const key = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
-        const label = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-        return { key, label };
-    });
-
-    const formatMonthLabel = (monthKey: string) => {
-        if (monthKey === 'all') return 'Todo el periodo';
-        const [year, month] = monthKey.split('-');
-        const date = new Date(parseInt(year), parseInt(month) - 1);
-        return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-    };
+    // Formatting dates for the subtitle
+    const fromDateLabel = new Date(from).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    const toDateLabel = new Date(to).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+    const rangeLabel = `${fromDateLabel} - ${toDateLabel}`;
 
     return (
         <div className="space-y-6">
@@ -184,7 +216,7 @@ export default function ExpensesTable() {
                     <CardContent>
                         <div className="text-2xl font-bold">{total.toFixed(2)}€</div>
                         <p className="text-xs text-muted-foreground">
-                            {formatMonthLabel(selectedMonth)}
+                            {rangeLabel}
                         </p>
                     </CardContent>
                 </Card>
@@ -217,21 +249,22 @@ export default function ExpensesTable() {
             {/* Filters & Actions */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-50/50 p-4 rounded-lg border border-gray-100 gap-4">
                 <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
-                    {/* Period Filter */}
+                    {/* Period Filters */}
                     <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-gray-500" />
-                        <select
-                            value={selectedMonth}
-                            onChange={(e) => setSelectedMonth(e.target.value)}
-                            className="h-9 rounded-md border text-sm bg-white px-2 py-1 max-w-[160px] focus:ring-2 focus:ring-slate-200 focus:border-slate-400 outline-none"
-                        >
-                            <option value="all">Todo el periodo</option>
-                            {availableMonths.map(month => (
-                                <option key={month.key} value={month.key}>
-                                    {month.label}
-                                </option>
-                            ))}
-                        </select>
+                        <Input
+                            type="date"
+                            value={from}
+                            onChange={(e) => setFrom(e.target.value)}
+                            className="h-9 w-[130px] text-sm"
+                        />
+                        <span className="text-gray-400 text-sm">a</span>
+                        <Input
+                            type="date"
+                            value={to}
+                            onChange={(e) => setTo(e.target.value)}
+                            className="h-9 w-[130px] text-sm"
+                        />
                     </div>
 
                     {/* Type Filter */}
@@ -270,6 +303,49 @@ export default function ExpensesTable() {
                     </Button>
                 </div>
             </div>
+
+            {/* Line Chart */}
+            {chartData.length > 0 && (
+                <Card className="mb-6 border border-gray-100 shadow-sm">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">Evolución de Gastos Temporales</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="h-[250px] w-full mt-4">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart
+                                    data={chartData}
+                                    margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                    <XAxis
+                                        dataKey="name"
+                                        fontSize={12}
+                                        tickLine={false}
+                                        axisLine={false}
+                                        stroke="#9CA3AF"
+                                    />
+                                    <YAxis
+                                        fontSize={12}
+                                        tickLine={false}
+                                        axisLine={false}
+                                        tickFormatter={(v) => `${v}€`}
+                                        stroke="#9CA3AF"
+                                    />
+                                    <Tooltip
+                                        formatter={(value: any, name: any) => [`${Number(value).toFixed(2)}€`, name]}
+                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                                    <Line type="monotone" dataKey="Fijo" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                                    <Line type="monotone" dataKey="Variable" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                                    <Line type="monotone" dataKey="Total" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Table */}
             <div className="rounded-md border bg-white">
