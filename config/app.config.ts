@@ -49,6 +49,7 @@ export const CONFIG = {
             MERCHANT_ID: process.env.SEQURA_MERCHANT_ID || '',
             API_KEY: process.env.SEQURA_API_KEY || '',
             API_URL: process.env.SEQURA_API_URL || 'https://api.sequra.com',
+            ENVIRONMENT: process.env.SEQURA_ENVIRONMENT || 'production',
         },
     },
 

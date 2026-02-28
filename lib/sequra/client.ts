@@ -11,7 +11,7 @@ async function getConfig(): Promise<SequraConfig> {
     const config = await getAppConfig('sequra_config');
     if (!config) throw new Error('SeQura configuration not found in app_settings');
 
-    const envString = config.environment || config.ENVIRONMENT || 'sandbox';
+    const envString = config.environment || config.ENVIRONMENT || 'production';
 
     return {
         MERCHANT_ID: config.merchant_id || config.MERCHANT_ID,

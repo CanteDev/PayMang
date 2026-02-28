@@ -61,7 +61,7 @@ function getEnvFallback(gateway: 'stripe' | 'hotmart' | 'sequra') {
                 merchant_id: CONFIG.GATEWAYS.SEQURA.MERCHANT_ID,
                 api_key: CONFIG.GATEWAYS.SEQURA.API_KEY,
                 api_url: CONFIG.GATEWAYS.SEQURA.API_URL,
-                environment: 'sandbox',
+                environment: CONFIG.GATEWAYS.SEQURA.ENVIRONMENT,
             };
     }
 }

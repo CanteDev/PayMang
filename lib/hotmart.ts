@@ -106,7 +106,7 @@ export class HotmartClient {
 
         // Hotmart domains for API v1/v2
         // Use the API_URL from config or fallback
-        const baseUrl = config.API_URL || config.api_url || 'https://sandbox.hotmart.com/payments/api/v1';
+        const baseUrl = config.API_URL || config.api_url || 'https://developers.hotmart.com/payments/api/v1';
 
         // Check if endpoint is already an absolute URL
         let url = endpoint;
