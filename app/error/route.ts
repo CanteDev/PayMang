@@ -1,17 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
-    const searchParams = request.nextUrl.searchParams;
-    const message = searchParams.get('message') || 'unknown_error';
+  const searchParams = request.nextUrl.searchParams;
+  const message = searchParams.get('message') || 'unknown_error';
 
-    const errorMessages: Record<string, string> = {
-        hotmart_not_configured: 'Hotmart no está configurado para este producto',
-        sequra_not_configured: 'seQura no está configurado',
-        link_not_found: 'El link de pago no existe o ya fue utilizado',
-        unknown_error: 'Ha ocurrido un error inesperado',
-    };
+  const errorTitles: Record<string, string> = {
+    auth_code_error: 'Enlace Inválido',
+    link_not_found: 'Enlace no encontrado',
+    default: 'Error de proceso',
+  };
 
-    return new NextResponse(`
+  const errorMessages: Record<string, string> = {
+    hotmart_not_configured: 'Hotmart no está configurado para este producto',
+    sequra_not_configured: 'seQura no está configurado',
+    link_not_found: 'El link de pago no existe o ya fue utilizado',
+    auth_code_error: 'El enlace de invitación ha expirado o ya ha sido utilizado. Por favor, solicita una nueva invitación al administrador.',
+    unknown_error: 'Ha ocurrido un error inesperado',
+  };
+
+  const title = errorTitles[message] || errorTitles.default;
+  const errorMessage = errorMessages[message] || errorMessages.unknown_error;
+
+  return new NextResponse(`
     <!DOCTYPE html>
     <html lang="es">
     <head>
@@ -55,9 +65,9 @@ export async function GET(request: NextRequest) {
     </head>
     <body>
       <div class="container">
-        <div class="icon">⚠️</div>
-        <h1>Error de pago</h1>
-        <p>${errorMessages[message]}</p>
+        <div class="icon">${message === 'auth_code_error' ? '🔑' : '⚠️'}</div>
+        <h1>${title}</h1>
+        <p>${errorMessage}</p>
         <p style="margin-top: 24px; font-size: 14px;">
           Si el problema persiste, contacta con soporte.
         </p>
@@ -65,8 +75,8 @@ export async function GET(request: NextRequest) {
     </body>
     </html>
   `, {
-        headers: {
-            'Content-Type': 'text/html',
-        },
-    });
+    headers: {
+      'Content-Type': 'text/html',
+    },
+  });
 }

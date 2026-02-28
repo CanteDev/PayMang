@@ -30,12 +30,19 @@ export async function inviteStaff(prevState: any, formData: FormData) {
         });
 
         // 1. Invite User via Auth Admin API
+        const headersList = require('next/headers').headers();
+        const host = headersList.get('host');
+        const protocol = host?.includes('localhost') ? 'http' : 'https';
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')
+            ? process.env.NEXT_PUBLIC_APP_URL
+            : `${protocol}://${host}`;
+
         const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(email, {
             data: {
                 full_name: fullName,
                 role: role,
             },
-            redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback?next=/update-password`, // Redirect to callback + update page
+            redirectTo: `${appUrl}/api/auth/callback?next=/update-password`,
         });
 
         if (authError) {
@@ -126,12 +133,19 @@ export async function updateStaff(prevState: any, formData: FormData) {
         // 2. If reactivating (false -> true), trigger invitation email
         if (currentProfile && !currentProfile.is_active && isActive) {
             console.log('Reactivating user, sending invitation:', currentProfile.email);
+            const headersList = require('next/headers').headers();
+            const host = headersList.get('host');
+            const protocol = host?.includes('localhost') ? 'http' : 'https';
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')
+                ? process.env.NEXT_PUBLIC_APP_URL
+                : `${protocol}://${host}`;
+
             const { error: authError } = await supabase.auth.admin.inviteUserByEmail(currentProfile.email, {
                 data: {
                     full_name: fullName,
                     role: role,
                 },
-                redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback?next=/update-password`,
+                redirectTo: `${appUrl}/api/auth/callback?next=/update-password`,
             });
 
             if (authError) {
