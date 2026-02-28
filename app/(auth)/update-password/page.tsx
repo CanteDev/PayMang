@@ -13,10 +13,41 @@ export default function UpdatePasswordPage() {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [initializing, setInitializing] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
 
     const router = useRouter();
+
+    useEffect(() => {
+        const initializeSession = async () => {
+            const hash = window.location.hash;
+            if (hash && hash.includes('access_token=')) {
+                console.log('Detected access_token in URL, setting session...');
+                const paramsStr = hash.startsWith('#') ? hash.substring(1) : hash;
+                const params = new URLSearchParams(paramsStr);
+                const access_token = params.get('access_token');
+                const refresh_token = params.get('refresh_token');
+
+                if (access_token && refresh_token) {
+                    const supabase = createClient();
+                    const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+
+                    if (error) {
+                        console.error('Error setting session from URL:', error);
+                        setError('El enlace de invitación es inválido o ha expirado. Solicita uno nuevo.');
+                    } else {
+                        // Clear hash for security
+                        window.history.replaceState(null, '', window.location.pathname);
+                        console.log('Session established from URL successfully.');
+                    }
+                }
+            }
+            setInitializing(false);
+        };
+
+        initializeSession();
+    }, []);
 
     const handleUpdatePassword = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -105,7 +136,7 @@ export default function UpdatePasswordPage() {
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
                                     className="rounded-lg h-10"
-                                    disabled={loading}
+                                    disabled={loading || initializing}
                                 />
                             </div>
 
@@ -121,7 +152,7 @@ export default function UpdatePasswordPage() {
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     required
                                     className="rounded-lg h-10"
-                                    disabled={loading}
+                                    disabled={loading || initializing}
                                 />
                             </div>
 
@@ -134,9 +165,9 @@ export default function UpdatePasswordPage() {
                             <Button
                                 type="submit"
                                 className="w-full h-10 rounded-lg bg-primary-700 hover:bg-primary-800 text-white font-medium shadow-sm transition-colors"
-                                disabled={loading}
+                                disabled={loading || initializing}
                             >
-                                {loading ? 'Actualizando...' : 'Guardar Contraseña'}
+                                {loading || initializing ? 'Procesando...' : 'Guardar Contraseña'}
                             </Button>
                         </form>
                     )}
