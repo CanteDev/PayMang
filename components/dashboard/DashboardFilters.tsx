@@ -11,23 +11,33 @@ export default function DashboardFilters() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    const [from, setFrom] = useState(searchParams.get('from') || '');
-    const [to, setTo] = useState(searchParams.get('to') || '');
+    // Obtener Fechas por Defecto (Mes actual)
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+
+    const defaultFrom = `${currentYear}-${pad(currentMonth + 1)}-01`;
+    const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const defaultTo = `${currentYear}-${pad(currentMonth + 1)}-${pad(lastDay)}`;
+
+    const [from, setFrom] = useState(searchParams.get('from') || defaultFrom);
+    const [to, setTo] = useState(searchParams.get('to') || defaultTo);
 
     const handleFilter = () => {
         const params = new URLSearchParams(searchParams.toString());
-        if (from) params.set('from', from);
+        if (from && from !== defaultFrom) params.set('from', from);
         else params.delete('from');
 
-        if (to) params.set('to', to);
+        if (to && to !== defaultTo) params.set('to', to);
         else params.delete('to');
 
         router.push(`?${params.toString()}`);
     };
 
     const handleClear = () => {
-        setFrom('');
-        setTo('');
+        setFrom(defaultFrom);
+        setTo(defaultTo);
         router.push('/admin');
     };
 

@@ -21,7 +21,7 @@ export async function getDashboardMetrics(startDate?: string, endDate?: string) 
 
     if (payError) {
         console.error('Error fetching payments for revenue:', payError);
-        return { totalRevenue: 0, netCashFlow: 0, pendingPayouts: 0, burnRate: 0 };
+        return { totalRevenue: 0, paidCommissions: 0, generatedCommissions: 0, periodExpenses: 0, netCashFlow: 0 };
     }
 
     const totalRevenue = (paymentsData as any[]).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
@@ -48,6 +48,14 @@ export async function getDashboardMetrics(startDate?: string, endDate?: string) 
             if (c.status !== 'paid' || !c.paid_at) return false;
             const pDate = new Date(c.paid_at);
             return pDate >= start && pDate <= end;
+        })
+        .reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+
+    const generatedCommissions = (commissionsData as any[])
+        .filter(c => {
+            if (!['pending', 'validated', 'paid'].includes(c.status)) return false;
+            const cDate = new Date(c.created_at);
+            return cDate >= start && cDate <= end;
         })
         .reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
 
@@ -97,7 +105,8 @@ export async function getDashboardMetrics(startDate?: string, endDate?: string) 
 
     return {
         totalRevenue,
-        paidCommissions,
+        paidCommissions, // Used for internal net cash flow or other things
+        generatedCommissions, // Used for display
         periodExpenses: totalExpenses,
         netCashFlow
     };

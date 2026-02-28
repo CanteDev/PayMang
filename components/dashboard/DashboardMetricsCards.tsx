@@ -7,6 +7,7 @@ interface MetricsProps {
     metrics: {
         totalRevenue: number;
         paidCommissions: number;
+        generatedCommissions: number;
         periodExpenses: number;
         netCashFlow: number;
     } | null;
@@ -17,7 +18,7 @@ export default function DashboardMetricsCards({ metrics }: MetricsProps) {
         return <div className="text-gray-500">No hay datos disponibles</div>;
     }
 
-    const { totalRevenue, paidCommissions, periodExpenses, netCashFlow } = metrics;
+    const { totalRevenue, generatedCommissions, periodExpenses, netCashFlow } = metrics;
 
     const cards = [
         {
@@ -29,12 +30,12 @@ export default function DashboardMetricsCards({ metrics }: MetricsProps) {
             description: 'Pagos cobrados en este periodo'
         },
         {
-            title: 'Comisiones Pagadas',
-            value: paidCommissions,
+            title: 'Comisiones Generadas',
+            value: generatedCommissions,
             icon: TrendingUp,
             color: 'text-orange-600',
             bgColor: 'bg-orange-100',
-            description: 'Pagadas a agentes en este periodo'
+            description: 'Generadas (pptes/pagadas) en el periodo'
         },
         {
             title: 'Gastos del Periodo',

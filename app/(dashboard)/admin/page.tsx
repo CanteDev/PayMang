@@ -13,7 +13,19 @@ export default async function AdminDashboard({
 }: {
     searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-    const { from = '', to = '' } = await searchParams;
+    const params = await searchParams;
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+
+    const defaultFrom = `${currentYear}-${pad(currentMonth + 1)}-01`;
+    const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const defaultTo = `${currentYear}-${pad(currentMonth + 1)}-${pad(lastDay)}`;
+
+    const from = params.from || defaultFrom;
+    const to = params.to || defaultTo;
 
     const supabase = await createClient();
 
