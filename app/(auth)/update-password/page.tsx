@@ -74,12 +74,12 @@ export default function UpdatePasswordPage() {
                         </div>
                     </div>
                     <CardTitle className="text-2xl font-semibold text-gray-900">
-                        {success ? 'Contraseña Actualizada' : 'Nueva Contraseña'}
+                        {success ? 'Contraseña Actualizada' : 'Bienvenido a PayMang'}
                     </CardTitle>
                     <CardDescription className="text-sm text-gray-600">
                         {success
                             ? 'Tu contraseña ha sido actualizada correctamente.'
-                            : 'Ingresa tu nueva contraseña para acceder a tu cuenta.'}
+                            : 'Establece tu contraseña para activar tu cuenta y comenzar a trabajar.'}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>

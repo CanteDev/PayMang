@@ -37,10 +37,8 @@ export async function inviteStaff(prevState: any, formData: FormData) {
 
         console.log('Generating invitation for host:', host);
 
-        // Invitation logic with explicit redirect
-        const callbackUrl = `${appUrl}/api/auth/callback`;
-        const nextParam = encodeURIComponent('/update-password');
-        const redirectTo = `${callbackUrl}?next=${nextParam}`;
+        // Direct client-side redirect to handle implicit flow (#access_token)
+        const redirectTo = `${appUrl}/update-password`;
 
         const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(email, {
             data: {
@@ -139,18 +137,16 @@ export async function updateStaff(prevState: any, formData: FormData) {
         if (currentProfile && !currentProfile.is_active && isActive) {
             console.log('Reactivating user, sending invitation:', currentProfile.email);
             const headersList = require('next/headers').headers();
-            const host = headersList.get('host');
+            const host = headersList.get('x-forwarded-host') || headersList.get('host');
             const protocol = host?.includes('localhost') ? 'http' : 'https';
-            const appUrl = process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')
-                ? process.env.NEXT_PUBLIC_APP_URL
-                : `${protocol}://${host}`;
+            const appUrl = `${protocol}://${host}`;
 
             const { error: authError } = await supabase.auth.admin.inviteUserByEmail(currentProfile.email, {
                 data: {
                     full_name: fullName,
                     role: role,
                 },
-                redirectTo: `${appUrl}/api/auth/callback?next=/update-password`,
+                redirectTo: `${appUrl}/update-password`,
             });
 
             if (authError) {
