@@ -8,10 +8,9 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
     // Basic auth protection for Cron
     const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        // Allow if running locally or from Vercel Cron (Vercel automatically secures it, but good to add secret)
-        // For now, allow public access if secret is missing? No, secure by default.
-        // Assuming Vercel Cron calls this.
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     try {

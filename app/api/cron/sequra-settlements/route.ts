@@ -101,12 +101,16 @@ async function fetchSeQuraSettlements(date: string): Promise<any[]> {
     }
 
     try {
+        // SeQura usa Basic Auth (merchantId:apiKey en Base64), NO Bearer
+        const auth = Buffer.from(`${merchantId}:${apiKey}`).toString('base64');
+
         const response = await fetch(
             `${apiUrl}/merchants/${merchantId}/settlements?date=${date}`,
             {
                 headers: {
-                    'Authorization': `Bearer ${apiKey}`,
+                    'Authorization': `Basic ${auth}`,
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                 },
             }
         );
