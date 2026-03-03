@@ -14,7 +14,18 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tags, ExternalLink, Trash2, PlusCircle, CreditCard, MoveHorizontal } from 'lucide-react';
+import { Tags, ExternalLink, Trash2, PlusCircle, MoreHorizontal, MoveRight, ChevronRight } from 'lucide-react';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { reassignOfferPackAction } from '@/app/actions/packs';
 
@@ -357,11 +368,10 @@ export default function PackOffersManager({ packId, packName, trigger, onSuccess
                             <Table>
                                 <TableHeader className="bg-gray-50">
                                     <TableRow>
-                                        <TableHead>Pasarela</TableHead>
+                                        <TableHead className="w-[90px]">Pasarela</TableHead>
                                         <TableHead>Nombre</TableHead>
-                                        <TableHead>Precio</TableHead>
-                                        <TableHead>Link</TableHead>
-                                        <TableHead>Mover a...</TableHead>
+                                        <TableHead className="w-[110px]">Precio</TableHead>
+                                        <TableHead className="w-[50px]">Link</TableHead>
                                         <TableHead className="w-[50px]"></TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -398,30 +408,56 @@ export default function PackOffersManager({ packId, packName, trigger, onSuccess
                                                 ) : <span className="text-gray-400 text-xs">-</span>}
                                             </TableCell>
                                             <TableCell>
-                                                <select
-                                                    disabled={!!movingOfferId}
-                                                    value={packId}
-                                                    onChange={(e) => handleMoveOffer(offer.id, offer.name, e.target.value)}
-                                                    className="text-[11px] h-7 px-1 rounded border border-gray-200 bg-white min-w-[120px]"
-                                                >
-                                                    <option value={packId}>Destino...</option>
-                                                    {allPacks.filter(p => p.id !== packId).map(p => (
-                                                        <option key={p.id} value={p.id}>
-                                                            ➡️ {p.name}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="w-6 h-6 hover:bg-red-100"
-                                                    onClick={() => handleDelete(offer.id, offer.name)}
-                                                    title="Eliminar oferta"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                                                </Button>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="w-7 h-7 hover:bg-gray-100"
+                                                            disabled={movingOfferId === offer.id}
+                                                        >
+                                                            <MoreHorizontal className="w-4 h-4 text-gray-500" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-52">
+                                                        <DropdownMenuLabel className="text-xs text-gray-500 font-normal">{offer.name}</DropdownMenuLabel>
+                                                        <DropdownMenuSeparator />
+                                                        {/* Submenú: Mover a otro pack */}
+                                                        <DropdownMenuSub>
+                                                            <DropdownMenuSubTrigger className="flex items-center gap-2 text-sm">
+                                                                <MoveRight className="w-3.5 h-3.5" />
+                                                                Mover a pack...
+                                                            </DropdownMenuSubTrigger>
+                                                            <DropdownMenuSubContent className="w-52 max-h-64 overflow-y-auto">
+                                                                {allPacks.filter(p => p.id !== packId).length === 0 ? (
+                                                                    <DropdownMenuItem disabled className="text-xs text-gray-400">
+                                                                        No hay otros packs
+                                                                    </DropdownMenuItem>
+                                                                ) : (
+                                                                    allPacks.filter(p => p.id !== packId).map(p => (
+                                                                        <DropdownMenuItem
+                                                                            key={p.id}
+                                                                            className="text-sm cursor-pointer"
+                                                                            onClick={() => handleMoveOffer(offer.id, offer.name, p.id)}
+                                                                        >
+                                                                            <ChevronRight className="w-3 h-3 mr-1 text-gray-400" />
+                                                                            {p.name}
+                                                                        </DropdownMenuItem>
+                                                                    ))
+                                                                )}
+                                                            </DropdownMenuSubContent>
+                                                        </DropdownMenuSub>
+                                                        <DropdownMenuSeparator />
+                                                        {/* Eliminar */}
+                                                        <DropdownMenuItem
+                                                            className="text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer text-sm flex items-center gap-2"
+                                                            onClick={() => handleDelete(offer.id, offer.name)}
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                            Eliminar oferta
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
                                     ))}
