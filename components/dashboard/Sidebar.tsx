@@ -55,6 +55,7 @@ export default function Sidebar({ profile, companyName = 'PayMang' }: SidebarPro
                 return [
                     { href: '/closer', label: 'Dashboard', icon: LayoutDashboard },
                     { href: '/closer/links', label: 'Generar Link', icon: LinkIcon },
+                    { href: '/closer/packs', label: 'Packs', icon: Package },
                     { href: '/closer/students', label: 'Alumnos', icon: Users },
                     { href: '/closer/commissions', label: 'Mis Comisiones', icon: DollarSign },
                     { href: '/closer/payslips', label: 'Mis Liquidaciones', icon: FileText },

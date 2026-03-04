@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,12 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
-import { UserPlus, Edit2 } from 'lucide-react';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { UserPlus, Edit2, ChevronDown, X, Search } from 'lucide-react';
 import { updateStudentAction, createStudentAction } from '@/app/actions/students';
 
 interface StudentFormProps {
@@ -65,6 +70,8 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
     const [setters, setSetters] = useState<any[]>([]);
     const [packs, setPacks] = useState<any[]>([]);
     const [packGateways, setPackGateways] = useState<Record<string, string[]>>({});
+    const [packOpen, setPackOpen] = useState(false);
+    const [packSearch, setPackSearch] = useState('');
     const [currentUser, setCurrentUser] = useState<any>(null);
 
     const supabase = createClient();
@@ -404,49 +411,95 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
 
                                 <div className="space-y-2">
                                     <Label htmlFor="pack">Pack Seleccionado</Label>
-                                    <div className="max-h-56 overflow-y-auto rounded-lg border border-gray-200 divide-y divide-gray-100">
-                                        {packs.map(pack => {
-                                            const gateways = packGateways[pack.id] || [];
-                                            const isSelected = packId === pack.id;
-                                            return (
-                                                <button
-                                                    key={pack.id}
-                                                    type="button"
-                                                    onClick={() => setPackId(isSelected ? '' : pack.id)}
-                                                    className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors
-                                                        ${isSelected
-                                                            ? 'bg-blue-50 border-l-2 border-l-blue-500'
-                                                            : 'hover:bg-gray-50 border-l-2 border-l-transparent'
-                                                        }`}
-                                                >
-                                                    {/* Nombre truncado */}
-                                                    <span className="text-sm font-medium text-gray-800 truncate min-w-0 flex-1">
-                                                        {pack.name}
+                                    <Popover open={packOpen} onOpenChange={setPackOpen}>
+                                        <PopoverTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className="w-full flex items-center justify-between gap-2 h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 transition-colors"
+                                            >
+                                                {packId ? (
+                                                    <span className="flex items-center gap-2 min-w-0">
+                                                        <span className="truncate font-medium text-gray-800">
+                                                            {packs.find(p => p.id === packId)?.name}
+                                                        </span>
+                                                        <span className="text-gray-500 shrink-0">
+                                                            {packs.find(p => p.id === packId)?.price}€
+                                                        </span>
                                                     </span>
-                                                    {/* Precio + badges de pasarela */}
-                                                    <span className="flex items-center gap-1.5 shrink-0">
-                                                        <span className="text-xs text-gray-500 whitespace-nowrap">{pack.price}€</span>
-                                                        {gateways.map((gw: string) => {
-                                                            const gwStyles: Record<string, string> = {
-                                                                stripe: 'bg-violet-100 text-violet-700',
-                                                                hotmart: 'bg-orange-100 text-orange-700',
-                                                                sequra: 'bg-emerald-100 text-emerald-700',
-                                                                manual: 'bg-gray-100 text-gray-600',
-                                                            };
-                                                            return (
-                                                                <span
-                                                                    key={gw}
-                                                                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize ${gwStyles[gw] || 'bg-gray-100 text-gray-600'}`}
-                                                                >
-                                                                    {gw}
+                                                ) : (
+                                                    <span className="text-gray-400">-- Seleccionar Pack --</span>
+                                                )}
+                                                <span className="flex items-center gap-1 shrink-0">
+                                                    {packId && (
+                                                        <span
+                                                            role="button"
+                                                            onClick={(e) => { e.stopPropagation(); setPackId(''); }}
+                                                            className="p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
+                                                        >
+                                                            <X className="w-3 h-3" />
+                                                        </span>
+                                                    )}
+                                                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                                                </span>
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            className="p-0 w-[480px] max-h-80 flex flex-col"
+                                            align="start"
+                                            sideOffset={4}
+                                        >
+                                            {/* Buscador interno */}
+                                            <div className="p-2 border-b flex items-center gap-2">
+                                                <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                <input
+                                                    autoFocus
+                                                    placeholder="Buscar pack..."
+                                                    value={packSearch}
+                                                    onChange={e => setPackSearch(e.target.value)}
+                                                    className="flex-1 text-sm outline-none bg-transparent placeholder-gray-400"
+                                                />
+                                            </div>
+                                            {/* Lista de packs */}
+                                            <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+                                                {packs
+                                                    .filter(p => p.name.toLowerCase().includes(packSearch.toLowerCase()))
+                                                    .map(pack => {
+                                                        const gateways = packGateways[pack.id] || [];
+                                                        const isSelected = packId === pack.id;
+                                                        const gwStyles: Record<string, string> = {
+                                                            stripe: 'bg-violet-100 text-violet-700',
+                                                            hotmart: 'bg-orange-100 text-orange-700',
+                                                            sequra: 'bg-emerald-100 text-emerald-700',
+                                                            manual: 'bg-gray-100 text-gray-600',
+                                                        };
+                                                        return (
+                                                            <button
+                                                                key={pack.id}
+                                                                type="button"
+                                                                onClick={() => { setPackId(isSelected ? '' : pack.id); setPackOpen(false); setPackSearch(''); }}
+                                                                className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-gray-50
+                                                                    ${isSelected ? 'bg-blue-50 border-l-2 border-l-blue-500' : 'border-l-2 border-l-transparent'}`}
+                                                            >
+                                                                <span className="text-sm font-medium text-gray-800 truncate flex-1 min-w-0">
+                                                                    {pack.name}
                                                                 </span>
-                                                            );
-                                                        })}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
+                                                                <span className="flex items-center gap-1.5 shrink-0">
+                                                                    <span className="text-xs text-gray-500 whitespace-nowrap">{pack.price}€</span>
+                                                                    {gateways.map((gw: string) => (
+                                                                        <span key={gw} className={`px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize ${gwStyles[gw] || 'bg-gray-100 text-gray-600'}`}>
+                                                                            {gw}
+                                                                        </span>
+                                                                    ))}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                {packs.filter(p => p.name.toLowerCase().includes(packSearch.toLowerCase())).length === 0 && (
+                                                    <p className="text-center text-sm text-gray-400 py-6">Sin resultados</p>
+                                                )}
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
 
                                 {packId && (
