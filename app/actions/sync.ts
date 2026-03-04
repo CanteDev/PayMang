@@ -181,16 +181,19 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
     // ----------------------------------------------------
     let deactivatedCount = 0;
 
+    // Only fetch offers that were created by sync (have an external_id)
     const { data: allGatewayOffers } = await (supabase.from('pack_offers') as any)
         .select('id, external_id, pack_id')
         .eq('gateway', gateway)
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .not('external_id', 'is', null);
 
     if (allGatewayOffers) {
-        for (const offer of allGatewayOffers) {
-            if (!offer.external_id) continue;
+        // Track which packs had at least one synced offer deactivated
+        const affectedPackIds = new Set<string>();
 
-            // If not found in current payload -> deactivate
+        for (const offer of allGatewayOffers) {
+            // If not found in current API response -> deactivate
             if (!processedIds.has(offer.external_id)) {
                 const { error: deactivateError } = await (supabase.from('pack_offers') as any)
                     .update({ is_active: false })
@@ -198,27 +201,51 @@ export async function syncGatewayProducts(gateway: 'stripe' | 'hotmart', product
 
                 if (!deactivateError) {
                     deactivatedCount++;
-
-                    // Check if parent Pack has ANY active offers left across ALL gateways
                     if (offer.pack_id) {
-                        const { count, error: countError } = await (supabase.from('pack_offers') as any)
-                            .select('id', { count: 'exact', head: true })
-                            .eq('pack_id', offer.pack_id)
-                            .eq('is_active', true);
-
-                        if (!countError && count === 0) {
-                            // No active offers left anywhere -> deactivate the parent Pack
-                            await (supabase.from('packs') as any)
-                                .update({ is_active: false })
-                                .eq('id', offer.pack_id);
-                        }
+                        affectedPackIds.add(offer.pack_id);
                     }
                 }
+            }
+        }
+
+        // For each affected pack: cascade-deactivate manual offers + pack if needed
+        for (const packId of affectedPackIds) {
+            // Step 1: Check if any synced (external_id) offers remain active for this gateway
+            const { count: syncedActiveCount } = await (supabase.from('pack_offers') as any)
+                .select('id', { count: 'exact', head: true })
+                .eq('pack_id', packId)
+                .eq('gateway', gateway)
+                .eq('is_active', true)
+                .not('external_id', 'is', null);
+
+            // Step 2: If no synced offers remain, also deactivate manual offers of same gateway.
+            // A manual Stripe offer is useless if no real Stripe product exists in production.
+            if (syncedActiveCount === 0) {
+                await (supabase.from('pack_offers') as any)
+                    .update({ is_active: false })
+                    .eq('pack_id', packId)
+                    .eq('gateway', gateway)
+                    .is('external_id', null)
+                    .eq('is_active', true);
+            }
+
+            // Step 3: Check if the pack has ANY active offers left across ALL gateways
+            const { count: totalActiveCount } = await (supabase.from('pack_offers') as any)
+                .select('id', { count: 'exact', head: true })
+                .eq('pack_id', packId)
+                .eq('is_active', true);
+
+            if (totalActiveCount === 0) {
+                // No active offers left in any gateway -> deactivate the parent Pack
+                await (supabase.from('packs') as any)
+                    .update({ is_active: false })
+                    .eq('id', packId);
             }
         }
     }
 
     return { success: true, newCount, updatedCount, deactivatedCount };
+
 }
 
 export async function processStripeSync() {
