@@ -64,6 +64,7 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
     const [closers, setClosers] = useState<any[]>([]);
     const [setters, setSetters] = useState<any[]>([]);
     const [packs, setPacks] = useState<any[]>([]);
+    const [packGateways, setPackGateways] = useState<Record<string, string[]>>({});
     const [currentUser, setCurrentUser] = useState<any>(null);
 
     const supabase = createClient();
@@ -96,13 +97,28 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
     };
 
     const loadPacks = async () => {
-        const { data } = await supabase
+        const { data: packsData } = await supabase
             .from('packs')
             .select('id, name, price')
             .eq('is_active', true)
             .order('price');
 
-        if (data) setPacks(data);
+        if (packsData) setPacks(packsData);
+
+        // Cargar gateways únicos por pack desde pack_offers
+        const { data: offersData } = await supabase
+            .from('pack_offers')
+            .select('pack_id, gateway')
+            .eq('is_active', true);
+
+        if (offersData) {
+            const map: Record<string, string[]> = {};
+            offersData.forEach(({ pack_id, gateway }: { pack_id: string; gateway: string }) => {
+                if (!map[pack_id]) map[pack_id] = [];
+                if (!map[pack_id].includes(gateway)) map[pack_id].push(gateway);
+            });
+            setPackGateways(map);
+        }
     };
 
     const loadCoaches = async () => {
@@ -388,20 +404,49 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
 
                                 <div className="space-y-2">
                                     <Label htmlFor="pack">Pack Seleccionado</Label>
-                                    <select
-                                        id="pack"
-                                        value={packId}
-                                        onChange={(e) => setPackId(e.target.value)}
-                                        className="w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
-                                        disabled={loading}
-                                    >
-                                        <option value="">-- Seleccionar Pack --</option>
-                                        {packs.map(pack => (
-                                            <option key={pack.id} value={pack.id}>
-                                                {pack.name} ({pack.price}€)
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <div className="max-h-56 overflow-y-auto rounded-lg border border-gray-200 divide-y divide-gray-100">
+                                        {packs.map(pack => {
+                                            const gateways = packGateways[pack.id] || [];
+                                            const isSelected = packId === pack.id;
+                                            return (
+                                                <button
+                                                    key={pack.id}
+                                                    type="button"
+                                                    onClick={() => setPackId(isSelected ? '' : pack.id)}
+                                                    className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors
+                                                        ${isSelected
+                                                            ? 'bg-blue-50 border-l-2 border-l-blue-500'
+                                                            : 'hover:bg-gray-50 border-l-2 border-l-transparent'
+                                                        }`}
+                                                >
+                                                    {/* Nombre truncado */}
+                                                    <span className="text-sm font-medium text-gray-800 truncate min-w-0 flex-1">
+                                                        {pack.name}
+                                                    </span>
+                                                    {/* Precio + badges de pasarela */}
+                                                    <span className="flex items-center gap-1.5 shrink-0">
+                                                        <span className="text-xs text-gray-500 whitespace-nowrap">{pack.price}€</span>
+                                                        {gateways.map((gw: string) => {
+                                                            const gwStyles: Record<string, string> = {
+                                                                stripe: 'bg-violet-100 text-violet-700',
+                                                                hotmart: 'bg-orange-100 text-orange-700',
+                                                                sequra: 'bg-emerald-100 text-emerald-700',
+                                                                manual: 'bg-gray-100 text-gray-600',
+                                                            };
+                                                            return (
+                                                                <span
+                                                                    key={gw}
+                                                                    className={`px-1.5 py-0.5 rounded text-[10px] font-semibold capitalize ${gwStyles[gw] || 'bg-gray-100 text-gray-600'}`}
+                                                                >
+                                                                    {gw}
+                                                                </span>
+                                                            );
+                                                        })}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
 
                                 {packId && (
