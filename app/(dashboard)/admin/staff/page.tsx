@@ -23,6 +23,7 @@ export default function AdminStaffPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('active');
 
     const supabase = createClient();
 
@@ -55,7 +56,12 @@ export default function AdminStaffPage() {
 
         const matchesRole = roleFilter === 'all' || member.role === roleFilter;
 
-        return matchesSearch && matchesRole;
+        const matchesStatus =
+            statusFilter === 'all' ||
+            (statusFilter === 'active' && member.is_active) ||
+            (statusFilter === 'inactive' && !member.is_active);
+
+        return matchesSearch && matchesRole && matchesStatus;
     });
 
     const getRoleBadge = (role: string) => {
@@ -111,6 +117,15 @@ export default function AdminStaffPage() {
                             <option value="closer">Closer</option>
                             <option value="coach">Coach</option>
                             <option value="setter">Setter</option>
+                        </select>
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
+                        >
+                            <option value="active">Activos</option>
+                            <option value="inactive">Inactivos</option>
+                            <option value="all">Todos los estados</option>
                         </select>
                     </div>
 
