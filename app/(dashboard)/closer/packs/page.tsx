@@ -65,7 +65,8 @@ export default function CloserPacksPage() {
     });
 
     const getGatewayBadges = (offers: Pack['pack_offers']) => {
-        const gateways = [...new Set((offers || []).map(o => o.gateway))];
+        // Solo mostrar gateways con offers ACTIVAS
+        const gateways = [...new Set((offers || []).filter(o => o.is_active).map(o => o.gateway))];
 
         if (gateways.length === 0) {
             return <span className="text-xs text-gray-400 italic">Sin pasarelas</span>;

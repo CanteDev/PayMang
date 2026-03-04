@@ -139,11 +139,10 @@ export default function AdminPacksPage() {
     });
 
     const getGatewayBadges = (offers: Pack['pack_offers']) => {
-        const allOffers = (offers || []);
-        // Deduplicar por gateway - mostrar todos los configurados (activos o no)
-        const gateways = [...new Set(allOffers.map(o => o.gateway))];
+        // Solo mostrar gateways con offers ACTIVAS
+        const activeGateways = [...new Set((offers || []).filter(o => o.is_active).map(o => o.gateway))];
 
-        if (gateways.length === 0) {
+        if (activeGateways.length === 0) {
             return (
                 <span className="text-xs text-gray-400 italic">Sin links configurados</span>
             );
@@ -156,9 +155,15 @@ export default function AdminPacksPage() {
             manual: 'bg-gray-100 text-gray-600',
         };
 
-        return gateways.map(gw => (
+        const labels: Record<string, string> = {
+            hotmart: 'Hotmart',
+            stripe: 'Stripe',
+            sequra: 'SeQura',
+        };
+
+        return activeGateways.map(gw => (
             <span key={gw} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${styles[gw] || 'bg-gray-100 text-gray-700'}`}>
-                {gw === 'hotmart' ? 'Hotmart' : gw === 'stripe' ? 'Stripe' : gw === 'sequra' ? 'SeQura' : gw}
+                {labels[gw] || gw}
             </span>
         ));
     };
