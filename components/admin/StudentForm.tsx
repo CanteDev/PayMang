@@ -112,11 +112,10 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
 
         if (packsData) setPacks(packsData);
 
-        // Cargar gateways únicos por pack desde pack_offers
+        // Cargar gateways únicos por pack desde pack_offers (todos, activos o no)
         const { data: offersData } = await supabase
             .from('pack_offers')
-            .select('pack_id, gateway')
-            .eq('is_active', true);
+            .select('pack_id, gateway');
 
         if (offersData) {
             const map: Record<string, string[]> = {};

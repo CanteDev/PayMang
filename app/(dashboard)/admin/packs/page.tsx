@@ -139,51 +139,28 @@ export default function AdminPacksPage() {
     });
 
     const getGatewayBadges = (offers: Pack['pack_offers']) => {
-        const badges = [];
-        const activeOffers = (offers || []).filter(o => o.is_active);
+        const allOffers = (offers || []);
+        // Deduplicar por gateway - mostrar todos los configurados (activos o no)
+        const gateways = [...new Set(allOffers.map(o => o.gateway))];
 
-        const hotmartOffer = activeOffers.find(o => o.gateway === 'hotmart');
-        if (hotmartOffer) {
-            badges.push(
-                <span
-                    key="hotmart"
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700 transition-colors"
-                >
-                    Hotmart
-                </span>
-            );
-        }
-
-        const stripeOffer = activeOffers.find(o => o.gateway === 'stripe');
-        if (stripeOffer) {
-            badges.push(
-                <span
-                    key="stripe"
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-700 transition-colors"
-                >
-                    Stripe
-                </span>
-            );
-        }
-
-        const sequraOffer = activeOffers.find(o => o.gateway === 'sequra');
-        if (sequraOffer) {
-            badges.push(
-                <span
-                    key="sequra"
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700 transition-colors"
-                >
-                    SeQura
-                </span>
-            );
-        }
-
-        if (badges.length === 0) {
+        if (gateways.length === 0) {
             return (
                 <span className="text-xs text-gray-400 italic">Sin links configurados</span>
             );
         }
-        return badges;
+
+        const styles: Record<string, string> = {
+            hotmart: 'bg-orange-100 text-orange-700',
+            stripe: 'bg-violet-100 text-violet-700',
+            sequra: 'bg-emerald-100 text-emerald-700',
+            manual: 'bg-gray-100 text-gray-600',
+        };
+
+        return gateways.map(gw => (
+            <span key={gw} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${styles[gw] || 'bg-gray-100 text-gray-700'}`}>
+                {gw === 'hotmart' ? 'Hotmart' : gw === 'stripe' ? 'Stripe' : gw === 'sequra' ? 'SeQura' : gw}
+            </span>
+        ));
     };
 
     const stats = {

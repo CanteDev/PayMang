@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Package, Search, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import PackOffersViewer from '@/components/admin/PackOffersViewer';
 
 interface Pack {
     id: string;
@@ -64,8 +65,7 @@ export default function CloserPacksPage() {
     });
 
     const getGatewayBadges = (offers: Pack['pack_offers']) => {
-        const activeOffers = (offers || []).filter(o => o.is_active);
-        const gateways = [...new Set(activeOffers.map(o => o.gateway))];
+        const gateways = [...new Set((offers || []).map(o => o.gateway))];
 
         if (gateways.length === 0) {
             return <span className="text-xs text-gray-400 italic">Sin pasarelas</span>;
@@ -170,12 +170,13 @@ export default function CloserPacksPage() {
                                         <TableHead>Pasarelas</TableHead>
                                         <TableHead>Mi Comisión</TableHead>
                                         <TableHead>Estado</TableHead>
+                                        <TableHead className="w-[60px]">Ofertas</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {filteredPacks.length === 0 ? (
                                         <tr>
-                                            <td colSpan={5} className="text-center py-12 text-gray-500">
+                                            <td colSpan={6} className="text-center py-12 text-gray-500">
                                                 <Package className="w-10 h-10 mx-auto mb-2 text-gray-300" />
                                                 <p>No se encontraron packs</p>
                                             </td>
@@ -220,6 +221,12 @@ export default function CloserPacksPage() {
                                                             <><XCircle className="w-3 h-3" /> Inactivo</>
                                                         )}
                                                     </span>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <PackOffersViewer
+                                                        packId={pack.id}
+                                                        packName={pack.name}
+                                                    />
                                                 </TableCell>
                                             </TableRow>
                                         ))
