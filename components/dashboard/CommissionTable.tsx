@@ -150,10 +150,12 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
                     .in('role', ['coach', 'closer', 'setter'])
                     .order('full_name');
                 if (data) {
-                    setAgents(data);
+                    type AgentProfile = { id: string; full_name: string; email: string; role: string };
+                    const typedData = data as AgentProfile[];
+                    setAgents(typedData);
                     // Group by role for filtered selectors
-                    const grouped: Record<string, typeof data> = {};
-                    for (const agent of data) {
+                    const grouped: Record<string, AgentProfile[]> = {};
+                    for (const agent of typedData) {
                         if (!grouped[agent.role]) grouped[agent.role] = [];
                         grouped[agent.role].push(agent);
                     }
