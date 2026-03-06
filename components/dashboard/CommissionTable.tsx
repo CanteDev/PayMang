@@ -149,6 +149,7 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
                     .from('profiles')
                     .select('id, full_name, email, role')
                     .in('role', ['coach', 'closer', 'setter'])
+                    .eq('is_active', true)
                     .order('full_name');
                 if (data) {
                     type AgentProfile = { id: string; full_name: string; email: string; role: string };
