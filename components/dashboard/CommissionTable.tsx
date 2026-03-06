@@ -36,9 +36,10 @@ import {
     Calendar,
     Users,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    Pencil
 } from 'lucide-react';
-import { validateCommission, reportIncidence, markAsPaid, resolveIncidence, modifyAndAcceptIncidence, rejectIncidence } from '@/app/actions/commissions';
+import { validateCommission, reportIncidence, markAsPaid, resolveIncidence, modifyAndAcceptIncidence, rejectIncidence, reassignCommissionAgent } from '@/app/actions/commissions';
 import { toast } from 'sonner';
 
 interface Commission {
@@ -99,7 +100,14 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
     const [managedCommission, setManagedCommission] = useState<Commission | null>(null);
     const [newAgentId, setNewAgentId] = useState('');
     const [newAmount, setNewAmount] = useState(0);
-    const [agents, setAgents] = useState<Array<{ id: string; full_name: string; email: string }>>([]);
+    const [agents, setAgents] = useState<Array<{ id: string; full_name: string; email: string; role: string }>>([]);
+    const [agentsByRole, setAgentsByRole] = useState<Record<string, Array<{ id: string; full_name: string; email: string; role: string }>>>({});
+
+    // Reassign Dialog State (for Admin)
+    const [isReassignOpen, setIsReassignOpen] = useState(false);
+    const [reassignCommission, setReassignCommission] = useState<Commission | null>(null);
+    const [reassignNewAgentId, setReassignNewAgentId] = useState('');
+    const [reassignLoading, setReassignLoading] = useState(false);
 
     // Pagination State
     const [page, setPage] = useState(1);
@@ -132,16 +140,25 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
         loadTotals(); // always recalculate totals independently
     }, [page, userRole, userId, statusFilter, agentFilter, selectedMonth]);
 
-    // Fetch agents (Coaches) for management dialog and filter
+    // Fetch agents for management dialog and filter
     useEffect(() => {
         if (userRole === 'admin') {
             const fetchAgents = async () => {
                 const { data } = await supabase
                     .from('profiles')
-                    .select('id, full_name, email')
+                    .select('id, full_name, email, role')
                     .in('role', ['coach', 'closer', 'setter'])
                     .order('full_name');
-                if (data) setAgents(data);
+                if (data) {
+                    setAgents(data);
+                    // Group by role for filtered selectors
+                    const grouped: Record<string, typeof data> = {};
+                    for (const agent of data) {
+                        if (!grouped[agent.role]) grouped[agent.role] = [];
+                        grouped[agent.role].push(agent);
+                    }
+                    setAgentsByRole(grouped);
+                }
             };
             fetchAgents();
         }
@@ -314,6 +331,42 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
         setNewAgentId(commission.agent_id);
         setNewAmount(commission.amount);
         setIsManagementOpen(true);
+    };
+
+    const handleOpenReassign = (commission: Commission) => {
+        setReassignCommission(commission);
+        setReassignNewAgentId(commission.agent_id);
+        setIsReassignOpen(true);
+    };
+
+    const handleConfirmReassign = async () => {
+        if (!reassignCommission || !reassignNewAgentId) return;
+        if (reassignNewAgentId === reassignCommission.agent_id) {
+            return;
+        }
+        setReassignLoading(true);
+        try {
+            const result = await reassignCommissionAgent(reassignCommission.id, reassignNewAgentId);
+            if (!result) {
+                toast.error('Error al reasignar el agente');
+                return;
+            }
+            if (result.error) {
+                toast.error(result.error);
+                return;
+            }
+            toast.success(
+                result.saleUpdated
+                    ? 'Agente reasignado. La venta también se actualizó para futuros plazos.'
+                    : 'Agente reasignado correctamente.'
+            );
+            setIsReassignOpen(false);
+            loadCommissions();
+        } catch {
+            toast.error('Error al reasignar el agente');
+        } finally {
+            setReassignLoading(false);
+        }
     };
 
     const handleModifyAndAccept = async () => {
@@ -630,6 +683,19 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
                                                             Gestionar
                                                         </Button>
                                                     )}
+
+                                                    {/* Reasignar Agente (Admin, solo pending o validated) */}
+                                                    {userRole === 'admin' && ['pending', 'validated'].includes(commission.status) && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="h-8 w-8 p-0 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
+                                                            onClick={() => handleOpenReassign(commission)}
+                                                            title="Reasignar agente"
+                                                        >
+                                                            <Pencil className="w-4 h-4" />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -666,6 +732,69 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Reassign Agent Dialog */}
+            <Dialog open={isReassignOpen} onOpenChange={setIsReassignOpen}>
+                <DialogContent className="sm:max-w-[480px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Pencil className="w-4 h-4" />
+                            Reasignar Agente
+                        </DialogTitle>
+                        <DialogDescription>
+                            Cambia el agente asignado a esta comisión. Solo se muestran agentes del mismo rol.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {reassignCommission && (
+                        <div className="grid gap-4 py-4">
+                            {/* Info display */}
+                            <div className="grid grid-cols-2 gap-2 text-sm p-3 bg-gray-50 rounded-md border">
+                                <div><span className="text-gray-500">Alumno:</span> <span className="font-medium">{reassignCommission.sale?.student?.full_name || reassignCommission.sale?.student?.email || '-'}</span></div>
+                                <div><span className="text-gray-500">Pack:</span> <span className="font-medium">{reassignCommission.sale?.pack?.name || '-'}</span></div>
+                                <div><span className="text-gray-500">Rol:</span> <span className="font-medium capitalize">{reassignCommission.agent?.role || '-'}</span></div>
+                                <div><span className="text-gray-500">Importe:</span> <span className="font-semibold text-green-700">{reassignCommission.amount.toFixed(2)}€</span></div>
+                                <div className="col-span-2"><span className="text-gray-500">Agente actual:</span> <span className="font-medium">{reassignCommission.agent?.full_name || reassignCommission.agent?.email || '-'}</span></div>
+                            </div>
+
+                            {/* Agent selector filtered by role */}
+                            <div className="grid gap-2">
+                                <Label htmlFor="reassign-agent">Nuevo Agente</Label>
+                                <select
+                                    id="reassign-agent"
+                                    value={reassignNewAgentId}
+                                    onChange={(e) => setReassignNewAgentId(e.target.value)}
+                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                >
+                                    <option value="">-- Selecciona un agente --</option>
+                                    {(agentsByRole[reassignCommission.agent?.role || ''] || agents).map(agent => (
+                                        <option key={agent.id} value={agent.id} disabled={agent.id === reassignCommission.agent_id}>
+                                            {agent.full_name} ({agent.email}){agent.id === reassignCommission.agent_id ? ' — actual' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Info notice */}
+                            <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-800">
+                                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-blue-500" />
+                                <span>La venta también se actualizará para que los <strong>plazos futuros</strong> de este pack se asignen al nuevo agente.</span>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => setIsReassignOpen(false)} disabled={reassignLoading}>
+                            Cancelar
+                        </Button>
+                        <Button
+                            onClick={handleConfirmReassign}
+                            disabled={reassignLoading || !reassignNewAgentId || reassignNewAgentId === reassignCommission?.agent_id}
+                            className="bg-indigo-600 hover:bg-indigo-700"
+                        >
+                            {reassignLoading ? 'Guardando...' : 'Guardar Reasignación'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={isIncidenceOpen} onOpenChange={setIsIncidenceOpen}>
                 <DialogContent>

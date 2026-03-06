@@ -264,3 +264,90 @@ export async function rejectIncidence(commissionId: string) {
     revalidatePath('/admin/payments');
     return { success: true };
 }
+
+/**
+ * Reasignar Agente de una Comisión (Solo Admin)
+ * Permite corregir el agente incorrecto en comisiones pending o validated.
+ * También actualiza la venta (sales) para que futuros plazos vayan al nuevo agente.
+ */
+export async function reassignCommissionAgent(commissionId: string, newAgentId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return { error: 'No autorizado' };
+
+    // Verificar rol admin
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+    if ((profile as any)?.role !== 'admin') {
+        return { error: 'Requiere permisos de administrador' };
+    }
+
+    // Obtener la comisión con su sale_id y role_at_sale
+    const { data: commission, error: fetchError } = await supabase
+        .from('commissions')
+        .select('id, sale_id, role_at_sale, status, agent_id')
+        .eq('id', commissionId)
+        .single();
+
+    if (fetchError || !commission) {
+        return { error: 'Comisión no encontrada' };
+    }
+
+    const c = commission as any;
+
+    // Solo se puede reasignar en estado pending o validated
+    if (!['pending', 'validated'].includes(c.status)) {
+        return { error: `No se puede reasignar una comisión en estado "${c.status}". Solo se permiten estados pending o validated.` };
+    }
+
+    // El nuevo agente debe ser diferente al actual
+    if (c.agent_id === newAgentId) {
+        return { error: 'El nuevo agente debe ser diferente al actual' };
+    }
+
+    const adminSupabase = getSupabaseAdmin();
+
+    // 1. Actualizar la comisión
+    const { error: commissionError } = await adminSupabase
+        .from('commissions')
+        .update({ agent_id: newAgentId, updated_at: new Date().toISOString() })
+        .eq('id', commissionId);
+
+    if (commissionError) {
+        return { error: 'Error al actualizar la comisión: ' + commissionError.message };
+    }
+
+    // 2. Mapear role_at_sale → campo de sales para actualizar futuros plazos
+    const roleToSalesField: Record<string, string> = {
+        closer: 'closer_id',
+        coach: 'coach_id',
+        setter: 'setter_id',
+    };
+
+    const saleField = roleToSalesField[c.role_at_sale];
+    let saleUpdated = false;
+
+    if (saleField && c.sale_id) {
+        const { error: saleError } = await adminSupabase
+            .from('sales')
+            .update({ [saleField]: newAgentId, updated_at: new Date().toISOString() })
+            .eq('id', c.sale_id);
+
+        if (saleError) {
+            // Non-blocking: commission was updated, warn about the sale
+            console.error('Error actualizando sale:', saleError);
+        } else {
+            saleUpdated = true;
+        }
+    }
+
+    revalidatePath('/admin/payments');
+    revalidatePath('/admin/commissions');
+    return { success: true, saleUpdated };
+}
+
