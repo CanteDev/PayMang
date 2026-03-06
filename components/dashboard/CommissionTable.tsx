@@ -46,6 +46,7 @@ interface Commission {
     id: string;
     sale_id: string;
     agent_id: string;
+    role_at_sale: string;
     agent_role: string;
     amount: number;
     status: 'pending' | 'incidence' | 'validated' | 'paid' | 'cancelled';
@@ -768,11 +769,14 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
                                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                 >
                                     <option value="">-- Selecciona un agente --</option>
-                                    {(agentsByRole[reassignCommission.agent?.role || ''] || agents).map(agent => (
+                                    {(agentsByRole[reassignCommission.role_at_sale || reassignCommission.agent?.role || ''] ?? []).map(agent => (
                                         <option key={agent.id} value={agent.id} disabled={agent.id === reassignCommission.agent_id}>
                                             {agent.full_name} ({agent.email}){agent.id === reassignCommission.agent_id ? ' — actual' : ''}
                                         </option>
                                     ))}
+                                    {(agentsByRole[reassignCommission.role_at_sale || reassignCommission.agent?.role || ''] ?? []).length === 0 && (
+                                        <option disabled>No hay agentes disponibles para este rol</option>
+                                    )}
                                 </select>
                             </div>
 
