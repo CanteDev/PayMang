@@ -37,8 +37,7 @@ import {
     Users,
     ChevronLeft,
     ChevronRight,
-    Pencil,
-    Download
+    Pencil
 } from 'lucide-react';
 import { 
     validateCommission, 
