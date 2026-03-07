@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,8 @@ import {
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Wallet, Plus, Check, X, AlertCircle, Calendar, CreditCard, Edit2, PackagePlus } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Wallet, Plus, Check, X, AlertCircle, Calendar, CreditCard, Edit2, PackagePlus, Search, ChevronDown } from 'lucide-react';
 import { Payment, Pack } from '@/types/database';
 import { registerPayment } from '@/app/actions/payments';
 import { createSaleAction, updateSaleAction } from '@/app/actions/sales';
@@ -47,6 +48,8 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
     // New Sale Form
     const [showAddSale, setShowAddSale] = useState(false);
     const [salePackId, setSalePackId] = useState('');
+    const [packOpen, setPackOpen] = useState(false);
+    const [packSearch, setPackSearch] = useState('');
     const [salePrice, setSalePrice] = useState(0);
     const [saleMethod, setSaleMethod] = useState<'upfront' | 'installments'>('upfront');
     const [saleInstallments, setSaleInstallments] = useState(1);
@@ -442,79 +445,100 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                         <div className="bg-blue-50/50 p-4 rounded-lg mb-6 border border-blue-100 animate-in fade-in slide-in-from-top-2">
                             <h4 className="font-semibold text-sm mb-3">Añadir Nuevo Pack al Alumno</h4>
                             <form onSubmit={handleCreateSale} className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    {/* LEFT: Pack selector */}
-                                    <div className="space-y-2">
-                                        <Label>Seleccionar Pack</Label>
-                                        <select
-                                            required
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                            value={salePackId}
-                                            onChange={e => setSalePackId(e.target.value)}
-                                        >
-                                            <option value="">-- Seleccionar --</option>
-                                            {[...packs].sort((a, b) => a.name.localeCompare(b.name)).map(p => (
-                                                <option key={p.id} value={p.id}>{p.name} ({p.price}€)</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {/* RIGHT: Pasarelas + Importe */}
-                                    <div className="space-y-2">
-                                        {salePackId ? (() => {
-                                            const selectedPackData = packs.find(p => p.id === salePackId);
-                                            const activeOffers = [...((selectedPackData as any)?.pack_offers?.filter((o: any) => o.is_active) || [])]
-                                                .sort((a: any, b: any) => a.gateway.localeCompare(b.gateway));
-                                            const uniqueGateways: string[] = [...new Set(activeOffers.map((o: any) => o.gateway as string))];
-                                            const gatewayStyles: Record<string, string> = {
-                                                hotmart: 'bg-orange-100 text-orange-700 border border-orange-200',
-                                                stripe: 'bg-violet-100 text-violet-700 border border-violet-200',
-                                                sequra: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
-                                                manual: 'bg-gray-100 text-gray-600 border border-gray-200',
-                                            };
-                                            const gatewayLabel: Record<string, string> = {
-                                                hotmart: 'Hotmart', stripe: 'Stripe', sequra: 'SeQura', manual: 'Manual'
-                                            };
-                                            return (
-                                                <>
-                                                    <Label>Pasarelas Disponibles</Label>
-                                                    <div className="flex h-10 items-center gap-1.5 flex-wrap">
-                                                        {uniqueGateways.length === 0 ? (
-                                                            <span className="text-xs text-gray-400 italic">Sin pasarelas configuradas</span>
-                                                        ) : uniqueGateways.map((gw) => (
-                                                            <span key={gw} className={`text-xs px-2 py-1 rounded font-medium ${gatewayStyles[gw] || 'bg-gray-100 text-gray-600'}`}>
-                                                                {gatewayLabel[gw] || gw}
+                                {/* Pack picker Popover - sorted by gateway then name, with inline badges */}
+                                {(() => {
+                                    const gwOrder: Record<string, number> = { hotmart: 0, stripe: 1, sequra: 2, manual: 3 };
+                                    const gwStyles: Record<string, string> = {
+                                        hotmart: 'bg-orange-100 text-orange-700',
+                                        stripe: 'bg-violet-100 text-violet-700',
+                                        sequra: 'bg-emerald-100 text-emerald-700',
+                                        manual: 'bg-gray-100 text-gray-600',
+                                    };
+                                    const gwLabel: Record<string, string> = { hotmart: 'Hotmart', stripe: 'Stripe', sequra: 'SeQura', manual: 'Manual' };
+                                    const getPackGateway = (p: any): string => {
+                                        const offers = (p as any).pack_offers?.filter((o: any) => o.is_active) || [];
+                                        return offers.sort((a: any, b: any) => (gwOrder[a.gateway] ?? 9) - (gwOrder[b.gateway] ?? 9))[0]?.gateway || 'zzz';
+                                    };
+                                    const sortedPacks = [...packs].sort((a, b) => {
+                                        const gA = getPackGateway(a), gB = getPackGateway(b);
+                                        const oA = gwOrder[gA] ?? 9, oB = gwOrder[gB] ?? 9;
+                                        if (oA !== oB) return oA - oB;
+                                        return a.name.localeCompare(b.name);
+                                    });
+                                    const filtered = sortedPacks.filter(p => p.name.toLowerCase().includes(packSearch.toLowerCase()));
+                                    const selectedPackData = packs.find(p => p.id === salePackId);
+                                    const selectedOffers = (selectedPackData as any)?.pack_offers?.filter((o: any) => o.is_active) || [];
+                                    const selectedGateways: string[] = Array.from(new Set<string>(selectedOffers.map((o: any) => String(o.gateway)))).sort();
+                                    return (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2 col-span-2">
+                                                <Label>Seleccionar Pack</Label>
+                                                <Popover open={packOpen} onOpenChange={setPackOpen}>
+                                                    <PopoverTrigger asChild>
+                                                        <button
+                                                            type="button"
+                                                            className="w-full flex items-center justify-between gap-2 h-10 px-3 rounded-md border border-input bg-background text-sm hover:bg-gray-50 transition-colors"
+                                                        >
+                                                            {salePackId ? (
+                                                                <span className="flex items-center gap-2 min-w-0 flex-1">
+                                                                    <span className="truncate font-medium text-gray-800">{selectedPackData?.name}</span>
+                                                                    <span className="text-gray-500 shrink-0">{selectedPackData?.price}€</span>
+                                                                    {selectedGateways.map(gw => (
+                                                                        <span key={gw} className={`text-[10px] px-1.5 py-0.5 rounded font-semibold shrink-0 ${gwStyles[gw] || 'bg-gray-100 text-gray-600'}`}>{gwLabel[gw] || gw}</span>
+                                                                    ))}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-gray-400">-- Seleccionar pack --</span>
+                                                            )}
+                                                            <span className="flex items-center gap-1 shrink-0">
+                                                                {salePackId && (
+                                                                    <span role="button" onClick={(e) => { e.stopPropagation(); setSalePackId(''); setPackSearch(''); }} className="p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600">
+                                                                        <X className="w-3 h-3" />
+                                                                    </span>
+                                                                )}
+                                                                <ChevronDown className="w-4 h-4 text-gray-400" />
                                                             </span>
-                                                        ))}
-                                                    </div>
-                                                </>
-                                            );
-                                        })() : (
-                                            <>
-                                                <Label>Importe Acordado (€)</Label>
-                                                <Input
-                                                    type="number"
-                                                    value={salePrice}
-                                                    onChange={e => setSalePrice(Number(e.target.value))}
-                                                    required
-                                                />
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
+                                                        </button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="p-0 w-[480px] max-h-80 flex flex-col" align="start" sideOffset={4}>
+                                                        <div className="p-2 border-b flex items-center gap-2">
+                                                            <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                            <input autoFocus placeholder="Buscar pack..." value={packSearch} onChange={e => setPackSearch(e.target.value)} className="flex-1 text-sm outline-none bg-transparent placeholder-gray-400" />
+                                                        </div>
+                                                        <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+                                                            {filtered.map(pack => {
+                                                                const offers = (pack as any).pack_offers?.filter((o: any) => o.is_active) || [];
+                                                                const gateways: string[] = Array.from(new Set<string>(offers.map((o: any) => String(o.gateway)))).sort((a, b) => (gwOrder[a] ?? 9) - (gwOrder[b] ?? 9));
+                                                                const isSelected = salePackId === pack.id;
+                                                                return (
+                                                                    <button key={pack.id} type="button"
+                                                                        onClick={() => { setSalePackId(isSelected ? '' : pack.id); setPackOpen(false); setPackSearch(''); }}
+                                                                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-gray-50 ${isSelected ? 'bg-blue-50 border-l-2 border-l-blue-500' : 'border-l-2 border-l-transparent'}`}
+                                                                    >
+                                                                        <span className="text-sm font-medium text-gray-800 truncate flex-1 min-w-0">{pack.name}</span>
+                                                                        <span className="flex items-center gap-1.5 shrink-0">
+                                                                            <span className="text-xs text-gray-500 whitespace-nowrap">{pack.price}€</span>
+                                                                            {gateways.map(gw => (
+                                                                                <span key={gw} className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${gwStyles[gw] || 'bg-gray-100 text-gray-600'}`}>{gwLabel[gw] || gw}</span>
+                                                                            ))}
+                                                                        </span>
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                            {filtered.length === 0 && <p className="text-center text-sm text-gray-400 py-6">Sin resultados</p>}
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
 
-                                {/* Importe shown separately when pack selected */}
-                                {salePackId && (
-                                    <div className="space-y-2">
-                                        <Label>Importe Acordado (€)</Label>
-                                        <Input
-                                            type="number"
-                                            value={salePrice}
-                                            onChange={e => setSalePrice(Number(e.target.value))}
-                                            required
-                                        />
-                                    </div>
-                                )}
+                                {/* Importe Acordado */}
+                                <div className="space-y-2">
+                                    <Label>Importe Acordado (€)</Label>
+                                    <Input type="number" value={salePrice} onChange={e => setSalePrice(Number(e.target.value))} required />
+                                </div>
                                 <div className="grid grid-cols-3 gap-4">
                                     <div className="space-y-2">
                                         <Label>Modalidad</Label>

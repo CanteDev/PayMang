@@ -75,29 +75,34 @@ export async function initiateSequraPayment(linkId: string) {
     // order_ref_1: Nuestra referencia (linkId) que llegará en el IPN para identificar el pedido
     const orderData = {
         order: {
-            state: 'solicited', // ← CORRECTO según docs. 'confirmed' solo va en el PUT de confirmación
+            state: 'solicited',
             merchant: {
                 id: merchantId,
                 notify_url: `${appUrl}/api/webhooks/sequra`,
                 return_url: `${appUrl}/p/sequra-confirmed?link=${linkId}`,
                 notification_parameters: {
                     link_id: linkId,
-                    token: ipnToken, // Verificado en el handler IPN para prevenir spoofing
+                    token: ipnToken,
                 },
+                store_ref: merchantId,        // Requerido: referencia de la tienda
+                operator_ref: paymentLink.student.email, // Requerido: operador (usamos email del alumno)
             },
             merchant_reference: {
-                order_ref_1: linkId, // ← CORRECTO: nuestro link_id llega en el IPN como order_ref_1
+                order_ref_1: linkId,
             },
             cart: {
                 currency: 'EUR',
+                gift: false, // Requerido: indica si es un regalo
                 items: [
                     {
                         reference: activeReference,
                         name: activeName,
-                        price_with_tax: Math.round(activePrice * 100), // en céntimos
+                        price_with_tax: Math.round(activePrice * 100),
                         quantity: 1,
                         total_with_tax: Math.round(activePrice * 100),
-                        type: 'service', // Formación = servicio
+                        type: 'service',
+                        downloadable: false,    // Requerido: no es descargable (servicio presencial/online)
+                        ends_in: 30,            // Requerido: duración del servicio en días
                     }
                 ],
                 order_total_with_tax: Math.round(activePrice * 100),
@@ -106,15 +111,50 @@ export async function initiateSequraPayment(linkId: string) {
                 email: paymentLink.student.email,
                 given_names: givenNames,
                 surnames: surnames,
-                // mobile_phone: Si tuviésemos teléfono del alumno, aquí
+                logged_in: false,       // Requerido: alumno no logueado en la tienda
+                language_code: 'es',    // Requerido: idioma del cliente
+                ip_number: '0.0.0.0',  // Requerido: IP (no disponible server-side, valor placeholder)
+                user_agent: 'Mozilla/5.0 PayMang-checkout/2.0', // Requerido: user agent
+            },
+            // Delivery address obligatoria aunque sea servicio digital
+            delivery_address: {
+                given_names: givenNames,
+                surnames: surnames,
+                company: '',
+                address_line_1: 'Digital Service',
+                address_line_2: '',
+                postal_code: '00000',
+                city: 'Online',
+                country_code: 'ES',
+            },
+            // Invoice address obligatoria
+            invoice_address: {
+                given_names: givenNames,
+                surnames: surnames,
+                company: '',
+                address_line_1: 'Digital Service',
+                address_line_2: '',
+                postal_code: '00000',
+                city: 'Online',
+                country_code: 'ES',
+            },
+            // Delivery method obligatorio
+            delivery_method: {
+                name: 'Servicio Digital',
+                days: 0,  // 0 días = entrega inmediata/digital
+                provider: 'Digital',
+                tracking_number: '',
             },
             gui: {
-                layout: 'responsive', // Adaptado a móvil/desktop
+                layout: 'responsive',
             },
             platform: {
                 name: CONFIG.APP.NAME,
                 version: '2.0.0',
                 plugin_version: '2.0.0',
+                uname: 'Linux PayMang/2.0',    // Requerido: info del SO del servidor
+                db_name: 'PostgreSQL',          // Requerido: nombre de la BD
+                db_version: '15',               // Requerido: versión de la BD
             },
         }
     };
