@@ -443,6 +443,7 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                             <h4 className="font-semibold text-sm mb-3">Añadir Nuevo Pack al Alumno</h4>
                             <form onSubmit={handleCreateSale} className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
+                                    {/* LEFT: Pack selector */}
                                     <div className="space-y-2">
                                         <Label>Seleccionar Pack</Label>
                                         <select
@@ -452,35 +453,58 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                                             onChange={e => setSalePackId(e.target.value)}
                                         >
                                             <option value="">-- Seleccionar --</option>
-                                            {packs.map(p => (
+                                            {[...packs].sort((a, b) => a.name.localeCompare(b.name)).map(p => (
                                                 <option key={p.id} value={p.id}>{p.name} ({p.price}€)</option>
                                             ))}
                                         </select>
-                                        {/* Show available gateways for selected pack */}
-                                        {salePackId && (() => {
-                                            const selectedPackData = packs.find(p => p.id === salePackId);
-                                            const activeOffers = (selectedPackData as any)?.pack_offers?.filter((o: any) => o.is_active) || [];
-                                            const gatewayStyles: Record<string, string> = {
-                                                hotmart: 'bg-orange-100 text-orange-700',
-                                                stripe: 'bg-violet-100 text-violet-700',
-                                                sequra: 'bg-emerald-100 text-emerald-700',
-                                                manual: 'bg-gray-100 text-gray-600',
-                                            };
-                                            if (activeOffers.length === 0) return (
-                                                <p className="text-xs text-gray-400 italic mt-1">Sin pasarelas configuradas</p>
-                                            );
-                                            return (
-                                                <div className="flex flex-wrap gap-1 mt-1">
-                                                    <span className="text-xs text-gray-500">Pasarelas:</span>
-                                                    {[...new Set(activeOffers.map((o: any) => o.gateway))].map((gw: any) => (
-                                                        <span key={gw} className={`text-xs px-1.5 py-0.5 rounded font-medium ${gatewayStyles[gw] || 'bg-gray-100 text-gray-600'}`}>
-                                                            {gw === 'sequra' ? 'SeQura' : gw === 'hotmart' ? 'Hotmart' : gw === 'stripe' ? 'Stripe' : gw}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            );
-                                        })()}
                                     </div>
+
+                                    {/* RIGHT: Pasarelas + Importe */}
+                                    <div className="space-y-2">
+                                        {salePackId ? (() => {
+                                            const selectedPackData = packs.find(p => p.id === salePackId);
+                                            const activeOffers = [...((selectedPackData as any)?.pack_offers?.filter((o: any) => o.is_active) || [])]
+                                                .sort((a: any, b: any) => a.gateway.localeCompare(b.gateway));
+                                            const uniqueGateways: string[] = [...new Set(activeOffers.map((o: any) => o.gateway as string))];
+                                            const gatewayStyles: Record<string, string> = {
+                                                hotmart: 'bg-orange-100 text-orange-700 border border-orange-200',
+                                                stripe: 'bg-violet-100 text-violet-700 border border-violet-200',
+                                                sequra: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+                                                manual: 'bg-gray-100 text-gray-600 border border-gray-200',
+                                            };
+                                            const gatewayLabel: Record<string, string> = {
+                                                hotmart: 'Hotmart', stripe: 'Stripe', sequra: 'SeQura', manual: 'Manual'
+                                            };
+                                            return (
+                                                <>
+                                                    <Label>Pasarelas Disponibles</Label>
+                                                    <div className="flex h-10 items-center gap-1.5 flex-wrap">
+                                                        {uniqueGateways.length === 0 ? (
+                                                            <span className="text-xs text-gray-400 italic">Sin pasarelas configuradas</span>
+                                                        ) : uniqueGateways.map((gw) => (
+                                                            <span key={gw} className={`text-xs px-2 py-1 rounded font-medium ${gatewayStyles[gw] || 'bg-gray-100 text-gray-600'}`}>
+                                                                {gatewayLabel[gw] || gw}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            );
+                                        })() : (
+                                            <>
+                                                <Label>Importe Acordado (€)</Label>
+                                                <Input
+                                                    type="number"
+                                                    value={salePrice}
+                                                    onChange={e => setSalePrice(Number(e.target.value))}
+                                                    required
+                                                />
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Importe shown separately when pack selected */}
+                                {salePackId && (
                                     <div className="space-y-2">
                                         <Label>Importe Acordado (€)</Label>
                                         <Input
@@ -490,7 +514,7 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                                             required
                                         />
                                     </div>
-                                </div>
+                                )}
                                 <div className="grid grid-cols-3 gap-4">
                                     <div className="space-y-2">
                                         <Label>Modalidad</Label>

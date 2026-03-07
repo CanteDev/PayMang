@@ -526,7 +526,7 @@ export default function UnifiedLinkGenerator() {
                         disabled={loading || !selectedStudent}
                     >
                         <option value="">Seleccionar pack...</option>
-                        {visiblePacks.map(pack => {
+                        {[...visiblePacks].sort((a, b) => a.name.localeCompare(b.name)).map(pack => {
                             const sale = studentSales.find(s => s.pack_id === pack.id);
                             const pending = sale ? (Number(sale.total_amount) - Number(sale.amount_collected)).toFixed(2) : 0;
                             return (
@@ -554,9 +554,9 @@ export default function UnifiedLinkGenerator() {
                         disabled={loading || !selectedPack || availableGateways.length === 0}
                     >
                         <option value="">Seleccionar pasarela...</option>
-                        {availableGateways.map(gateway => (
+                        {[...availableGateways].sort().map(gateway => (
                             <option key={gateway} value={gateway}>
-                                {gateway.charAt(0).toUpperCase() + gateway.slice(1)}
+                                {gateway === 'hotmart' ? 'Hotmart' : gateway === 'stripe' ? 'Stripe' : gateway === 'sequra' ? 'SeQura' : gateway.charAt(0).toUpperCase() + gateway.slice(1)}
                             </option>
                         ))}
                     </select>
