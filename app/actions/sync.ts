@@ -381,3 +381,59 @@ export async function processHotmartSync() {
         return { success: false, error: `Error conectando con Hotmart API: ${e.message}` };
     }
 }
+
+export async function processSequraSync() {
+    console.log("Starting SeQura Connection Verification...");
+    try {
+        const config = await getGatewayConfig('sequra');
+        const merchantId = config.merchant_id || config.MERCHANT_ID;
+        const apiKey = config.api_key || config.API_KEY;
+        const environment = config.environment || config.ENVIRONMENT || 'sandbox';
+        const apiUrl = environment === 'production'
+            ? 'https://live.sequrapi.com'
+            : 'https://sandbox.sequrapi.com';
+
+        if (!merchantId || !apiKey) {
+            return { success: false, error: 'Credenciales de SeQura no configuradas (Merchant ID y Password son requeridos)' };
+        }
+
+        const auth = Buffer.from(`${merchantId}:${apiKey}`).toString('base64');
+
+        const response = await fetch(`${apiUrl}/merchants/${merchantId}/payment_methods`, {
+            headers: {
+                'Authorization': `Basic ${auth}`,
+                'Accept': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => response.statusText);
+            return { success: false, error: `Error de SeQura API (${response.status}): ${errorText}` };
+        }
+
+        const data = await response.json();
+
+        // Extract payment method names from nested structure
+        const methods: string[] = [];
+        const groups = data?.payment_options || data || [];
+        for (const group of (Array.isArray(groups) ? groups : [])) {
+            const options = group?.payment_options || [];
+            for (const opt of options) {
+                if (opt?.product && opt?.title) {
+                    methods.push(`${opt.title} (${opt.product})`);
+                }
+            }
+        }
+
+        const message = methods.length > 0
+            ? `Conexión correcta. Métodos disponibles: ${methods.join(', ')}`
+            : `Conexión correcta con SeQura (entorno: ${environment})`;
+
+        console.log(`✅ SeQura verification OK: ${message}`);
+        return { success: true, message, methodCount: methods.length };
+
+    } catch (e: any) {
+        console.error("SeQura Sync/Verify Error:", e.message);
+        return { success: false, error: `Error conectando con SeQura API: ${e.message}` };
+    }
+}

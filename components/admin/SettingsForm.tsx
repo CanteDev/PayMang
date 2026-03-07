@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { updateSetting } from '@/app/actions/settings';
-import { processStripeSync, processHotmartSync } from '@/app/actions/sync';
+import { processStripeSync, processHotmartSync, processSequraSync } from '@/app/actions/sync';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Eye, EyeOff, RefreshCw } from 'lucide-react';
@@ -65,28 +65,37 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
         }
     };
 
-    const handleSync = async (gateway: 'stripe' | 'hotmart') => {
+    const handleSync = async (gateway: 'stripe' | 'hotmart' | 'sequra') => {
         setSyncLoading(gateway);
-        toast.info(`Iniciando sincronización de ${gateway}...`);
+        toast.info(`Verificando conexión con ${gateway}...`);
         try {
             let res;
             if (gateway === 'stripe') {
                 res = await processStripeSync();
             } else if (gateway === 'hotmart') {
                 res = await processHotmartSync();
+            } else if (gateway === 'sequra') {
+                res = await processSequraSync();
             }
             if (res && res.success) {
                 const sRes = res as any;
-                toast.success(<div className="flex flex-col gap-1">
-                    <span>Sincronización completada</span>
-                    <span className="text-xs opacity-90">{sRes.newCount} añadidos, {sRes.updatedCount} actualizados, {sRes.deactivatedCount} desactivados.</span>
-                </div>);
+                if (gateway === 'sequra') {
+                    toast.success(<div className="flex flex-col gap-1">
+                        <span>SeQura conectado correctamente</span>
+                        <span className="text-xs opacity-90">{sRes.message}</span>
+                    </div>);
+                } else {
+                    toast.success(<div className="flex flex-col gap-1">
+                        <span>Sincronización completada</span>
+                        <span className="text-xs opacity-90">{sRes.newCount} añadidos, {sRes.updatedCount} actualizados, {sRes.deactivatedCount} desactivados.</span>
+                    </div>);
+                }
             } else if (res && !res.success) {
                 toast.error(`Error de la pasarela: ${(res as any).error}`);
             }
         } catch (error: any) {
             console.error(error);
-            toast.error(`Error sincronizando ${gateway}: ${error.message}`);
+            toast.error(`Error verificando ${gateway}: ${error.message}`);
         } finally {
             setSyncLoading(null);
         }
@@ -459,7 +468,7 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>API Key / Asset Token</Label>
+                                    <Label>Password</Label>
                                     <div className="relative">
                                         <Input
                                             type={showPasswords['sequra_api'] ? "text" : "password"}
@@ -487,12 +496,22 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                         <option value="production">Producción</option>
                                     </select>
                                 </div>
-                                <Button
-                                    onClick={() => handleSave('sequra_config')}
-                                    disabled={loading === 'sequra_config'}
-                                >
-                                    {loading === 'sequra_config' ? 'Guardando...' : 'Guardar SeQura'}
-                                </Button>
+                                <div className="flex gap-3 pt-2">
+                                    <Button
+                                        onClick={() => handleSave('sequra_config')}
+                                        disabled={loading === 'sequra_config'}
+                                    >
+                                        {loading === 'sequra_config' ? 'Guardando...' : 'Guardar SeQura'}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => handleSync('sequra')}
+                                        disabled={syncLoading === 'sequra'}
+                                    >
+                                        <RefreshCw className={cn('mr-2 h-4 w-4', syncLoading === 'sequra' && 'animate-spin')} />
+                                        {syncLoading === 'sequra' ? 'Verificando...' : 'Verificar Conexión'}
+                                    </Button>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
