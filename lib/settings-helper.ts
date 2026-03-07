@@ -30,7 +30,17 @@ export async function getGatewayConfig(gateway: 'stripe' | 'hotmart' | 'sequra')
         if (!error && data) {
             const dbConfig = data.value;
             const envConfig = getEnvFallback(gateway);
-            return { ...envConfig, ...dbConfig };
+            // Normalize DB keys to lowercase so they always override env vars.
+            // DB stores keys as API_KEY/MERCHANT_ID (uppercase); env fallback uses api_key/merchant_id (lowercase).
+            // Without normalization they're treated as different properties and env vars win incorrectly.
+            const normalizedDbConfig: Record<string, any> = {};
+            for (const [k, v] of Object.entries(dbConfig)) {
+                normalizedDbConfig[k.toLowerCase()] = v;
+                normalizedDbConfig[k] = v; // keep original casing too for safety
+            }
+            const merged = { ...envConfig, ...normalizedDbConfig };
+            console.log(`[SeQura config] db_keys=${Object.keys(dbConfig).join(',')} merchant=${merged.merchant_id}`);
+            return merged;
         }
     }
 
