@@ -263,13 +263,21 @@ export default function UnifiedLinkGenerator() {
             const pack = packs.find(p => p.id === selectedPack);
             if (pack) {
                 // Set default commissions
-                const cCloser = (pack.commission_closer && pack.commission_closer > 0 ? pack.commission_closer : (globalRates?.closer || 0)) * 100;
-                const cCoach = (pack.commission_coach && pack.commission_coach > 0 ? pack.commission_coach : (globalRates?.coach || 0)) * 100;
-                const cSetter = (pack.commission_setter && pack.commission_setter > 0 ? pack.commission_setter : (globalRates?.setter || 0)) * 100;
+                // pack.commission_* are stored as % integers (e.g. 8 = 8%)
+                // globalRates are stored as decimals (e.g. 0.08 = 8%) → multiply *100 for display
+                const cCloser = (pack.commission_closer && pack.commission_closer > 0)
+                    ? pack.commission_closer
+                    : (globalRates?.closer || 0) * 100;
+                const cCoach = (pack.commission_coach && pack.commission_coach > 0)
+                    ? pack.commission_coach
+                    : (globalRates?.coach || 0) * 100;
+                const cSetter = (pack.commission_setter && pack.commission_setter > 0)
+                    ? pack.commission_setter
+                    : (globalRates?.setter || 0) * 100;
                 
-                setSaleCommCloser(cCloser ? cCloser.toString() : '0');
-                setSaleCommCoach(cCoach ? cCoach.toString() : '0');
-                setSaleCommSetter(cSetter ? cSetter.toString() : '0');
+                setSaleCommCloser(cCloser ? cCloser.toFixed(2) : '0');
+                setSaleCommCoach(cCoach ? cCoach.toFixed(2) : '0');
+                setSaleCommSetter(cSetter ? cSetter.toFixed(2) : '0');
 
                 const gateways = new Set<string>();
 

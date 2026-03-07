@@ -123,10 +123,10 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
             setPayments(paymentsData);
         }
 
-        // Fetch packs
+        // Fetch packs with their offers (for gateway display)
         const { data: packsData } = await supabase
             .from('packs')
-            .select('*, commission_closer, commission_coach, commission_setter')
+            .select('*, commission_closer, commission_coach, commission_setter, pack_offers(*)')
             .eq('is_active', true)
             .order('name');
         if (packsData) setPacks(packsData);
@@ -175,22 +175,28 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
         setLoading(false);
     };
 
-    // Auto-calculate price and commissions when pack selection changes in Add Sale
     useEffect(() => {
         if (salePackId && packs.length > 0) {
             const pack = packs.find(p => p.id === salePackId);
             if (pack) {
                 setSalePrice(pack.price);
                 
-                // Set default commissions
-                const cCloser = (pack.commission_closer && pack.commission_closer > 0 ? pack.commission_closer : (globalRates?.closer || 0));
-                const cCoach = (pack.commission_coach && pack.commission_coach > 0 ? pack.commission_coach : (globalRates?.coach || 0));
-                const cSetter = (pack.commission_setter && pack.commission_setter > 0 ? pack.commission_setter : (globalRates?.setter || 0));
+                // pack.commission_* are stored as % integers (e.g. 8 = 8%)
+                // globalRates are stored as decimals (e.g. 0.08 = 8%)
+                const cCloser = (pack.commission_closer && Number(pack.commission_closer) > 0)
+                    ? Number(pack.commission_closer)
+                    : (globalRates?.closer || 0) * 100;
+                const cCoach = (pack.commission_coach && Number(pack.commission_coach) > 0)
+                    ? Number(pack.commission_coach)
+                    : (globalRates?.coach || 0) * 100;
+                const cSetter = (pack.commission_setter && Number(pack.commission_setter) > 0)
+                    ? Number(pack.commission_setter)
+                    : (globalRates?.setter || 0) * 100;
                 
                 if (!editingSaleId) {
-                    setSaleCommCloser(cCloser ? cCloser.toString() : '0');
-                    setSaleCommCoach(cCoach ? cCoach.toString() : '0');
-                    setSaleCommSetter(cSetter ? cSetter.toString() : '0');
+                    setSaleCommCloser(cCloser ? cCloser.toFixed(2) : '0');
+                    setSaleCommCoach(cCoach ? cCoach.toFixed(2) : '0');
+                    setSaleCommSetter(cSetter ? cSetter.toFixed(2) : '0');
                 }
             }
         }
@@ -450,6 +456,30 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                                                 <option key={p.id} value={p.id}>{p.name} ({p.price}€)</option>
                                             ))}
                                         </select>
+                                        {/* Show available gateways for selected pack */}
+                                        {salePackId && (() => {
+                                            const selectedPackData = packs.find(p => p.id === salePackId);
+                                            const activeOffers = (selectedPackData as any)?.pack_offers?.filter((o: any) => o.is_active) || [];
+                                            const gatewayStyles: Record<string, string> = {
+                                                hotmart: 'bg-orange-100 text-orange-700',
+                                                stripe: 'bg-violet-100 text-violet-700',
+                                                sequra: 'bg-emerald-100 text-emerald-700',
+                                                manual: 'bg-gray-100 text-gray-600',
+                                            };
+                                            if (activeOffers.length === 0) return (
+                                                <p className="text-xs text-gray-400 italic mt-1">Sin pasarelas configuradas</p>
+                                            );
+                                            return (
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    <span className="text-xs text-gray-500">Pasarelas:</span>
+                                                    {[...new Set(activeOffers.map((o: any) => o.gateway))].map((gw: any) => (
+                                                        <span key={gw} className={`text-xs px-1.5 py-0.5 rounded font-medium ${gatewayStyles[gw] || 'bg-gray-100 text-gray-600'}`}>
+                                                            {gw === 'sequra' ? 'SeQura' : gw === 'hotmart' ? 'Hotmart' : gw === 'stripe' ? 'Stripe' : gw}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Importe Acordado (€)</Label>
