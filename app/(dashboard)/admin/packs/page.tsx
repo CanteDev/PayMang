@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Package, Search, Edit2, Trash2, ExternalLink, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import PackForm from '@/components/admin/PackForm';
+import SequraPackForm from '@/components/admin/SequraPackForm';
 import PackOffersManager from '@/components/admin/PackOffersManager';
 import { toast } from 'sonner';
 
@@ -215,7 +216,7 @@ export default function AdminPacksPage() {
                             <span>Listado de Packs</span>
                         </CardTitle>
                         <div className="flex items-center gap-2">
-                            <PackForm onSuccess={loadPacks} />
+                            <SequraPackForm onSuccess={loadPacks} />
                             <Button
                                 variant="outline"
                                 onClick={() => router.push('/admin/settings?tab=payment')}
