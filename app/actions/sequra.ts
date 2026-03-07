@@ -204,7 +204,12 @@ export async function initiateSequraPayment(linkId: string) {
 
         // 9. Obtener formulario de identificación para mostrarlo al alumno
         // GET /orders/{uuid}/form_v2?product=i1 (i1 = invoicing, pp1 = pago aplazado, etc.)
-        const formHtml = await getIdentificationForm(orderRef);
+        // Get identification form: product code determines the financing type shown to the customer
+        // 'pp6' = Paga Fraccionado (the available product for this merchant in sandbox)
+        // The product code comes from the merchant's contract, not from the pack offer external_id
+        // (external_id in pack_offers is the campaign/product ID in SeQura's catalog, not the financing type)
+        const sequraProduct = (paymentLink.offer as any)?.sequra_product || 'pp6';
+        const formHtml = await getIdentificationForm(orderRef, sequraProduct);
 
         return {
             success: true,
