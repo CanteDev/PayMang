@@ -59,6 +59,12 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
     const [userRole, setUserRole] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
 
+    // Commission Rates Override
+    const [globalRates, setGlobalRates] = useState<{closer: number, coach: number, setter: number} | null>(null);
+    const [saleCommCloser, setSaleCommCloser] = useState<string>('');
+    const [saleCommCoach, setSaleCommCoach] = useState<string>('');
+    const [saleCommSetter, setSaleCommSetter] = useState<string>('');
+
     // Staff for Attribution
     const [coaches, setCoaches] = useState<any[]>([]);
     const [closers, setClosers] = useState<any[]>([]);
@@ -120,10 +126,20 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
         // Fetch packs
         const { data: packsData } = await supabase
             .from('packs')
-            .select('*')
+            .select('*, commission_closer, commission_coach, commission_setter')
             .eq('is_active', true)
             .order('name');
         if (packsData) setPacks(packsData);
+
+        // Fetch Global Rates
+        const { data: ratesData } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'commission_rates')
+            .single();
+        if (ratesData && (ratesData as any).value) {
+            setGlobalRates((ratesData as any).value);
+        }
 
         // Fetch Staff
         const { data: staffData } = await supabase
@@ -159,13 +175,26 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
         setLoading(false);
     };
 
-    // Auto-calculate price when pack selection changes in Add Sale
+    // Auto-calculate price and commissions when pack selection changes in Add Sale
     useEffect(() => {
         if (salePackId && packs.length > 0) {
             const pack = packs.find(p => p.id === salePackId);
-            if (pack) setSalePrice(pack.price);
+            if (pack) {
+                setSalePrice(pack.price);
+                
+                // Set default commissions
+                const cCloser = (pack.commission_closer && pack.commission_closer > 0 ? pack.commission_closer : (globalRates?.closer || 0)) * 100;
+                const cCoach = (pack.commission_coach && pack.commission_coach > 0 ? pack.commission_coach : (globalRates?.coach || 0)) * 100;
+                const cSetter = (pack.commission_setter && pack.commission_setter > 0 ? pack.commission_setter : (globalRates?.setter || 0)) * 100;
+                
+                if (!editingSaleId) {
+                    setSaleCommCloser(cCloser ? cCloser.toString() : '0');
+                    setSaleCommCoach(cCoach ? cCoach.toString() : '0');
+                    setSaleCommSetter(cSetter ? cSetter.toString() : '0');
+                }
+            }
         }
-    }, [salePackId, packs]);
+    }, [salePackId, packs, globalRates, editingSaleId]);
 
     const handleAddPayment = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -240,7 +269,10 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                 start_date: saleStartDate,
                 coach_id: selectedCoachId,
                 closer_id: selectedCloserId,
-                setter_id: selectedSetterId
+                setter_id: selectedSetterId,
+                commission_closer: saleCommCloser ? parseFloat(saleCommCloser) / 100 : null,
+                commission_coach: saleCommCoach ? parseFloat(saleCommCoach) / 100 : null,
+                commission_setter: saleCommSetter ? parseFloat(saleCommSetter) / 100 : null
             });
 
             if (res.success) {
@@ -272,7 +304,10 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                 start_date: saleStartDate,
                 coach_id: selectedCoachId,
                 closer_id: selectedCloserId,
-                setter_id: selectedSetterId
+                setter_id: selectedSetterId,
+                commission_closer: saleCommCloser ? parseFloat(saleCommCloser) / 100 : null,
+                commission_coach: saleCommCoach ? parseFloat(saleCommCoach) / 100 : null,
+                commission_setter: saleCommSetter ? parseFloat(saleCommSetter) / 100 : null
             });
 
             if (res.success) {
@@ -299,6 +334,10 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
         setSelectedCoachId(sale.coach_id || '');
         setSelectedCloserId(sale.closer_id || '');
         setSelectedSetterId(sale.setter_id || '');
+        
+        setSaleCommCloser(sale.commission_closer != null ? (sale.commission_closer * 100).toString() : '');
+        setSaleCommCoach(sale.commission_coach != null ? (sale.commission_coach * 100).toString() : '');
+        setSaleCommSetter(sale.commission_setter != null ? (sale.commission_setter * 100).toString() : '');
     };
 
     // Totals across ALL sales for the header summary
@@ -378,6 +417,9 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                                         setSaleMethod('upfront');
                                         setSaleInstallments(1);
                                         setSaleStartDate(new Date().toISOString().split('T')[0]);
+                                        setSaleCommCloser('');
+                                        setSaleCommCoach('');
+                                        setSaleCommSetter('');
                                     }
                                 }}
                                 variant={showAddSale ? "secondary" : "outline"}
@@ -500,6 +542,52 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                                                 <option value="">-- Sin asignar --</option>
                                                 {setters.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
                                             </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {/* Commission Override */}
+                                <div className="pt-2 border-t border-blue-200/50">
+                                    <p className="text-[10px] font-semibold text-blue-600 uppercase mb-2">Comisiones para esta Venta (%)</p>
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px]">Closer (%)</Label>
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                step="0.01"
+                                                value={saleCommCloser}
+                                                onChange={(e) => setSaleCommCloser(e.target.value)}
+                                                disabled={submitting}
+                                                className="h-8 text-xs"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px]">Coach (%)</Label>
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                step="0.01"
+                                                value={saleCommCoach}
+                                                onChange={(e) => setSaleCommCoach(e.target.value)}
+                                                disabled={submitting}
+                                                className="h-8 text-xs"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px]">Setter (%)</Label>
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                step="0.01"
+                                                value={saleCommSetter}
+                                                onChange={(e) => setSaleCommSetter(e.target.value)}
+                                                disabled={submitting}
+                                                className="h-8 text-xs"
+                                            />
                                         </div>
                                     </div>
                                 </div>

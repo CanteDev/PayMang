@@ -25,6 +25,9 @@ export async function createSaleAction(studentId: string, salePayload: any) {
             closer_id: salePayload.closer_id || null,
             coach_id: salePayload.coach_id || null,
             setter_id: salePayload.setter_id || null,
+            commission_closer: salePayload.commission_closer ?? null,
+            commission_coach: salePayload.commission_coach ?? null,
+            commission_setter: salePayload.commission_setter ?? null,
             metadata: salePayload.metadata || {}
         };
 
@@ -189,7 +192,10 @@ export async function updateSaleAction(saleId: string, payload: any) {
                 start_date: payload.start_date,
                 closer_id: payload.closer_id || null,
                 coach_id: payload.coach_id || null,
-                setter_id: payload.setter_id || null
+                setter_id: payload.setter_id || null,
+                commission_closer: payload.commission_closer ?? null,
+                commission_coach: payload.commission_coach ?? null,
+                commission_setter: payload.commission_setter ?? null
             })
             .eq('id', saleId)
             .select()

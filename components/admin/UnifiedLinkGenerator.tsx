@@ -25,6 +25,9 @@ interface Pack {
     price: number;
     gateway_ids: any;
     offers?: PackOffer[];
+    commission_closer?: number;
+    commission_coach?: number;
+    commission_setter?: number;
 }
 
 interface PackOffer {
@@ -58,6 +61,12 @@ export default function UnifiedLinkGenerator() {
     const [selectedOffer, setSelectedOffer] = useState<string>('');
     const [selectedCloser, setSelectedCloser] = useState<string>('');
     const [selectedSetter, setSelectedSetter] = useState<string>('');
+
+    // Commission Rates Override
+    const [globalRates, setGlobalRates] = useState<{closer: number, coach: number, setter: number} | null>(null);
+    const [saleCommCloser, setSaleCommCloser] = useState<string>('');
+    const [saleCommCoach, setSaleCommCoach] = useState<string>('');
+    const [saleCommSetter, setSaleCommSetter] = useState<string>('');
 
     const [generatedLink, setGeneratedLink] = useState<string>('');
     const [generatedLinkId, setGeneratedLinkId] = useState<string>('');
@@ -111,6 +120,14 @@ export default function UnifiedLinkGenerator() {
                 .eq('is_active', true)
                 .order('full_name');
             if (closersData) setClosers(closersData);
+
+            // Cargar globales
+            const { data: ratesData } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'commission_rates')
+                .single();
+            if (ratesData && (ratesData as any).value) setGlobalRates((ratesData as any).value);
 
             // Cargar setters
             const { data: settersData } = await supabase
@@ -245,6 +262,15 @@ export default function UnifiedLinkGenerator() {
         if (selectedPack) {
             const pack = packs.find(p => p.id === selectedPack);
             if (pack) {
+                // Set default commissions
+                const cCloser = (pack.commission_closer && pack.commission_closer > 0 ? pack.commission_closer : (globalRates?.closer || 0)) * 100;
+                const cCoach = (pack.commission_coach && pack.commission_coach > 0 ? pack.commission_coach : (globalRates?.coach || 0)) * 100;
+                const cSetter = (pack.commission_setter && pack.commission_setter > 0 ? pack.commission_setter : (globalRates?.setter || 0)) * 100;
+                
+                setSaleCommCloser(cCloser ? cCloser.toString() : '0');
+                setSaleCommCoach(cCoach ? cCoach.toString() : '0');
+                setSaleCommSetter(cSetter ? cSetter.toString() : '0');
+
                 const gateways = new Set<string>();
 
                 // Add gateways from offers, prioritize offers over gateway_ids
@@ -269,8 +295,11 @@ export default function UnifiedLinkGenerator() {
             setSelectedGateway('');
             setAvailableOffers([]);
             setSelectedOffer('');
+            setSaleCommCloser('');
+            setSaleCommCoach('');
+            setSaleCommSetter('');
         }
-    }, [selectedPack, packs]);
+    }, [selectedPack, packs, globalRates]);
 
     // Actualizar ofertas cuando cambia la pasarela
     useEffect(() => {
@@ -358,7 +387,10 @@ export default function UnifiedLinkGenerator() {
                         coach_id: assignedCoach,
                         closer_id: selectedCloser,
                         setter_id: selectedSetter || null,
-                        target_sale_id: targetSale ? targetSale.id : undefined
+                        target_sale_id: targetSale ? targetSale.id : undefined,
+                        commission_closer: saleCommCloser ? parseFloat(saleCommCloser) / 100 : null,
+                        commission_coach: saleCommCoach ? parseFloat(saleCommCoach) / 100 : null,
+                        commission_setter: saleCommSetter ? parseFloat(saleCommSetter) / 100 : null
                     } as any,
                 } as any);
 
@@ -608,6 +640,46 @@ export default function UnifiedLinkGenerator() {
                             </option>
                         ))}
                     </select>
+                </div>
+
+                {/* Commission Override */}
+                <div className="pt-2 border-t border-gray-200">
+                    <p className="text-[10px] font-semibold text-gray-500 uppercase mb-2">Comisiones por Venta (%)</p>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-1">
+                            <Label className="text-[11px]">Closer (%)</Label>
+                            <Input
+                                type="number"
+                                min="0" max="100" step="0.01"
+                                value={saleCommCloser}
+                                onChange={(e) => setSaleCommCloser(e.target.value)}
+                                disabled={loading}
+                                className="h-8 text-xs"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <Label className="text-[11px]">Coach (%)</Label>
+                            <Input
+                                type="number"
+                                min="0" max="100" step="0.01"
+                                value={saleCommCoach}
+                                onChange={(e) => setSaleCommCoach(e.target.value)}
+                                disabled={loading}
+                                className="h-8 text-xs"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <Label className="text-[11px]">Setter (%)</Label>
+                            <Input
+                                type="number"
+                                min="0" max="100" step="0.01"
+                                value={saleCommSetter}
+                                onChange={(e) => setSaleCommSetter(e.target.value)}
+                                disabled={loading}
+                                className="h-8 text-xs"
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 {error && (

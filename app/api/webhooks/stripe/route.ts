@@ -117,7 +117,15 @@ async function handleCheckoutCompleted(session: any) {
         console.warn('Metadata vacía para link:', link.id);
     }
 
-    const { coach_id, closer_id, setter_id, target_sale_id } = link.metadata || {};
+    const { 
+        coach_id, 
+        closer_id, 
+        setter_id, 
+        target_sale_id,
+        commission_closer,
+        commission_coach,
+        commission_setter
+    } = link.metadata || {};
     const packPrice = link.pack.price;
     const actualAmountPaid = (session.amount_total || 0) / 100;
 
@@ -173,7 +181,10 @@ async function handleCheckoutCompleted(session: any) {
             },
             coach_id: coach_id || existingSale.coach_id,
             closer_id: closer_id || existingSale.closer_id,
-            setter_id: setter_id || existingSale.setter_id
+            setter_id: setter_id || existingSale.setter_id,
+            commission_closer: commission_closer ?? existingSale.commission_closer,
+            commission_coach: commission_coach ?? existingSale.commission_coach,
+            commission_setter: commission_setter ?? existingSale.commission_setter
         };
 
         const { data: updatedSale, error: updateError } = await supabase
@@ -202,7 +213,10 @@ async function handleCheckoutCompleted(session: any) {
             },
             coach_id,
             closer_id,
-            setter_id
+            setter_id,
+            commission_closer: commission_closer ?? null,
+            commission_coach: commission_coach ?? null,
+            commission_setter: commission_setter ?? null
         };
 
         const { data: newSale, error: insertError } = await supabase

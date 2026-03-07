@@ -90,7 +90,13 @@ export async function createStudentAction(payload: any, salePayload?: any) {
                 payment_method: salePayload.payment_method,
                 total_installments: salePayload.total_installments,
                 installment_period: salePayload.installment_period,
-                start_date: salePayload.start_date
+                start_date: salePayload.start_date,
+                coach_id: payload.assigned_coach_id || null,
+                closer_id: payload.closer_id || null,
+                setter_id: payload.setter_id || null,
+                commission_closer: salePayload.commission_closer ?? null,
+                commission_coach: salePayload.commission_coach ?? null,
+                commission_setter: salePayload.commission_setter ?? null,
             };
 
             const { data: newSale, error: saleError } = await (supabase as any)

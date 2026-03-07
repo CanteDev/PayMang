@@ -84,7 +84,15 @@ export async function POST(request: NextRequest) {
         }
 
         // Extraer datos del link
-        const { coach_id, closer_id, setter_id, target_sale_id } = link.metadata || {};
+        const { 
+            coach_id, 
+            closer_id, 
+            setter_id, 
+            target_sale_id,
+            commission_closer,
+            commission_coach,
+            commission_setter
+        } = link.metadata || {};
         const packPrice = link.offer?.price || link.pack?.price || 0;
         const productName = link.offer?.name
             ? `${link.pack?.name} - ${link.offer.name}`
@@ -148,8 +156,14 @@ export async function POST(request: NextRequest) {
                         ...existingSale.metadata,
                         sequra_product_code: productCode,
                         ipn_received_at: new Date().toISOString(),
-                    }
-                })
+                    },
+                    coach_id: coach_id || existingSale.coach_id,
+                    closer_id: closer_id || existingSale.closer_id,
+                    setter_id: setter_id || existingSale.setter_id,
+                    commission_closer: commission_closer ?? existingSale.commission_closer,
+                    commission_coach: commission_coach ?? existingSale.commission_coach,
+                    commission_setter: commission_setter ?? existingSale.commission_setter
+                } as any)
                 .eq('id', existingSale.id)
                 .select()
                 .single();
@@ -171,6 +185,9 @@ export async function POST(request: NextRequest) {
                     coach_id,
                     closer_id,
                     setter_id,
+                    commission_closer: commission_closer ?? null,
+                    commission_coach: commission_coach ?? null,
+                    commission_setter: commission_setter ?? null,
                     metadata: {
                         ...link.metadata,
                         pack_offer_id: link.pack_offer_id,

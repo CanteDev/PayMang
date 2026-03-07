@@ -159,7 +159,15 @@ async function handlePurchaseComplete(data: any) {
 
     const studentId = link.student_id;
     const packId = link.pack_id;
-    const { coach_id, closer_id, setter_id, target_sale_id } = link.metadata || {};
+    const { 
+        coach_id, 
+        closer_id, 
+        setter_id, 
+        target_sale_id,
+        commission_closer,
+        commission_coach,
+        commission_setter
+    } = link.metadata || {};
     const packPrice = link.offer?.price || link.pack?.price || totalAmount;
 
     // 2. Deduplicación — buscar venta existente pendiente
@@ -208,7 +216,10 @@ async function handlePurchaseComplete(data: any) {
             },
             coach_id: coach_id || existingSale.coach_id,
             closer_id: closer_id || existingSale.closer_id,
-            setter_id: setter_id || existingSale.setter_id
+            setter_id: setter_id || existingSale.setter_id,
+            commission_closer: commission_closer ?? existingSale.commission_closer,
+            commission_coach: commission_coach ?? existingSale.commission_coach,
+            commission_setter: commission_setter ?? existingSale.commission_setter
         };
 
         const { data: updatedSale, error: updateError } = await supabase
@@ -239,7 +250,10 @@ async function handlePurchaseComplete(data: any) {
             },
             coach_id,
             closer_id,
-            setter_id
+            setter_id,
+            commission_closer: commission_closer ?? null,
+            commission_coach: commission_coach ?? null,
+            commission_setter: commission_setter ?? null
         };
 
         const { data: newSale, error: insertError } = await supabase

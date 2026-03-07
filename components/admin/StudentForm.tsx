@@ -65,6 +65,11 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
     const [installmentPeriod, setInstallmentPeriod] = useState(student?.installment_period || 1);
     const [startDate, setStartDate] = useState(student?.start_date || new Date().toISOString().split('T')[0]);
 
+    const [globalRates, setGlobalRates] = useState<{closer: number, coach: number, setter: number} | null>(null);
+    const [saleCommCloser, setSaleCommCloser] = useState<string>('');
+    const [saleCommCoach, setSaleCommCoach] = useState<string>('');
+    const [saleCommSetter, setSaleCommSetter] = useState<string>('');
+
     const [coaches, setCoaches] = useState<any[]>([]);
     const [closers, setClosers] = useState<any[]>([]);
     const [setters, setSetters] = useState<any[]>([]);
@@ -83,8 +88,20 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
             loadSetters();
             loadPacks();
             loadCurrentUser();
+            loadGlobalRates();
         }
     }, [open]);
+
+    const loadGlobalRates = async () => {
+        const { data } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'commission_rates')
+            .single();
+        if (data && (data as any).value) {
+            setGlobalRates((data as any).value);
+        }
+    };
 
     const loadCurrentUser = async () => {
         const { data: { user } } = await supabase.auth.getUser();
@@ -106,7 +123,7 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
     const loadPacks = async () => {
         const { data: packsData } = await supabase
             .from('packs')
-            .select('id, name, price')
+            .select('id, name, price, commission_closer, commission_coach, commission_setter')
             .eq('is_active', true)
             .order('price');
 
@@ -195,15 +212,24 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
         if (data) setSetters(data);
     };
 
-    // Auto-calculate agreed price if pack changes
+    // Auto-calculate agreed price and default commissions if pack changes
     useEffect(() => {
         if (packId && packs.length > 0) {
             const pack = packs.find(p => p.id === packId);
             if (pack) {
                 setAgreedPrice(pack.price);
+                
+                // Set default commissions for this sale
+                const cCloser = (pack.commission_closer > 0 ? pack.commission_closer : (globalRates?.closer || 0)) * 100;
+                const cCoach = (pack.commission_coach > 0 ? pack.commission_coach : (globalRates?.coach || 0)) * 100;
+                const cSetter = (pack.commission_setter > 0 ? pack.commission_setter : (globalRates?.setter || 0)) * 100;
+                
+                setSaleCommCloser(cCloser ? cCloser.toString() : '0');
+                setSaleCommCoach(cCoach ? cCoach.toString() : '0');
+                setSaleCommSetter(cSetter ? cSetter.toString() : '0');
             }
         }
-    }, [packId, packs]);
+    }, [packId, packs, globalRates]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -247,7 +273,10 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                     total_installments: paymentMethod === 'installments' ? Number(totalInstallments) : 1,
                     installment_period: paymentMethod === 'installments' ? Number(installmentPeriod) : 1,
                     start_date: startDate,
-                    agreed_price: Number(agreedPrice)
+                    agreed_price: Number(agreedPrice),
+                    commission_closer: saleCommCloser ? parseFloat(saleCommCloser) / 100 : null,
+                    commission_coach: saleCommCoach ? parseFloat(saleCommCoach) / 100 : null,
+                    commission_setter: saleCommSetter ? parseFloat(saleCommSetter) / 100 : null,
                 } : undefined;
 
                 const response = await createStudentAction(studentData, salePayload);
@@ -270,6 +299,9 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                 setSetterId('');
                 setStatus('active');
                 setPackId('');
+                setSaleCommCloser('');
+                setSaleCommCoach('');
+                setSaleCommSetter('');
                 setPaymentMethod('upfront');
                 setTotalInstallments(1);
                 setInstallmentPeriod(1);
@@ -564,6 +596,57 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                                                 </div>
                                             </div>
                                         )}
+
+                                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 space-y-3 mt-4">
+                                            <div>
+                                                <h5 className="text-sm font-semibold text-gray-700">Comisiones para esta Venta (%)</h5>
+                                                <p className="text-xs text-gray-500">Valores precalculados del pack o ajustes globales. Puedes editarlos.</p>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="comm-closer" className="text-xs">Closer (%)</Label>
+                                                    <Input
+                                                        id="comm-closer"
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        step="0.01"
+                                                        value={saleCommCloser}
+                                                        onChange={(e) => setSaleCommCloser(e.target.value)}
+                                                        disabled={loading}
+                                                        className="h-8 text-sm"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="comm-coach" className="text-xs">Coach (%)</Label>
+                                                    <Input
+                                                        id="comm-coach"
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        step="0.01"
+                                                        value={saleCommCoach}
+                                                        onChange={(e) => setSaleCommCoach(e.target.value)}
+                                                        disabled={loading}
+                                                        className="h-8 text-sm"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="comm-setter" className="text-xs">Setter (%)</Label>
+                                                    <Input
+                                                        id="comm-setter"
+                                                        type="number"
+                                                        min="0"
+                                                        max="100"
+                                                        step="0.01"
+                                                        value={saleCommSetter}
+                                                        onChange={(e) => setSaleCommSetter(e.target.value)}
+                                                        disabled={loading}
+                                                        className="h-8 text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
                                     </>
                                 )}
                             </div>
