@@ -351,3 +351,98 @@ export async function reassignCommissionAgent(commissionId: string, newAgentId: 
     return { success: true, saleUpdated };
 }
 
+/**
+ * Validar múltiples comisiones a la vez (Admin y Agentes para sus propias comisiones)
+ */
+export async function validateMultipleCommissions(commissionIds: string[]) {
+    if (!commissionIds || commissionIds.length === 0) return { error: 'No se seleccionaron comisiones' };
+    
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return { error: 'No autorizado' };
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+    const isAdmin = (profile as any)?.role === 'admin';
+    const adminSupabase = getSupabaseAdmin();
+
+    try {
+        if (isAdmin) {
+            // Admin can validate any pending or incidence commission
+            const { error } = await adminSupabase
+                .from('commissions')
+                .update({ status: 'validated', validated_at: new Date().toISOString() })
+                .in('id', commissionIds)
+                .in('status', ['pending', 'incidence']);
+                
+            if (error) throw error;
+        } else {
+            // Agents can only validate their own pending or incidence commissions
+            const { error } = await adminSupabase
+                .from('commissions')
+                .update({ status: 'validated', validated_at: new Date().toISOString() })
+                .in('id', commissionIds)
+                .in('status', ['pending', 'incidence'])
+                .eq('agent_id', user.id);
+                
+            if (error) throw error;
+        }
+
+        revalidatePath('/admin/payments');
+        revalidatePath('/admin/commissions');
+        revalidatePath('/closer/commissions');
+        revalidatePath('/coach/commissions');
+        revalidatePath('/setter/commissions');
+        return { success: true, count: commissionIds.length };
+    } catch (e: any) {
+        console.error('Error validating multiple commissions:', e);
+        return { error: 'Error al validar las comisiones seleccionadas' };
+    }
+}
+
+/**
+ * Marcar múltiples comisiones como pagadas (Solo Admin)
+ */
+export async function markMultipleAsPaid(commissionIds: string[]) {
+    if (!commissionIds || commissionIds.length === 0) return { error: 'No se seleccionaron comisiones' };
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return { error: 'No autorizado' };
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+    if ((profile as any)?.role !== 'admin') {
+        return { error: 'Requiere permisos de administrador' };
+    }
+
+    const adminSupabase = getSupabaseAdmin();
+
+    try {
+        const { error } = await adminSupabase
+            .from('commissions')
+            .update({ status: 'paid', paid_at: new Date().toISOString() })
+            .in('id', commissionIds)
+            .eq('status', 'validated');
+
+        if (error) throw error;
+
+        revalidatePath('/admin/payments');
+        revalidatePath('/admin/commissions');
+        return { success: true, count: commissionIds.length };
+    } catch (e: any) {
+        console.error('Error paying multiple commissions:', e);
+        return { error: 'Error al marcar las comisiones como pagadas' };
+    }
+}
+

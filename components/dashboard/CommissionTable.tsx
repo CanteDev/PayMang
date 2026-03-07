@@ -39,7 +39,17 @@ import {
     ChevronRight,
     Pencil
 } from 'lucide-react';
-import { validateCommission, reportIncidence, markAsPaid, resolveIncidence, modifyAndAcceptIncidence, rejectIncidence, reassignCommissionAgent } from '@/app/actions/commissions';
+import { 
+    validateCommission, 
+    reportIncidence, 
+    markAsPaid, 
+    resolveIncidence, 
+    modifyAndAcceptIncidence, 
+    rejectIncidence, 
+    reassignCommissionAgent,
+    validateMultipleCommissions,
+    markMultipleAsPaid
+} from '@/app/actions/commissions';
 import { toast } from 'sonner';
 
 interface Commission {
@@ -115,6 +125,10 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
     const [totalCount, setTotalCount] = useState(0);
     const PAGE_SIZE = 20;
 
+    // Bulk Actions State
+    const [selectedCommissions, setSelectedCommissions] = useState<Set<string>>(new Set());
+    const [isBulkLoading, setIsBulkLoading] = useState(false);
+
     // Server-side totals (independent of pagination)
     const [statsTotalAmount, setStatsTotalAmount] = useState(0);
     const [statsPaidAmount, setStatsPaidAmount] = useState(0);
@@ -122,9 +136,10 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
 
     const supabase = createClient();
 
-    // Reset page on filter change
+    // Reset page and selection on filter change
     useEffect(() => {
         setPage(1);
+        setSelectedCommissions(new Set());
     }, [statusFilter, agentFilter, selectedMonth, searchTerm]);
 
     // Update status filter if URL changes
@@ -413,6 +428,66 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
 
 
 
+    const handleSelectAll = (checked: boolean) => {
+        if (checked) {
+            const newSet = new Set(selectedCommissions);
+            filteredCommissions.forEach(c => newSet.add(c.id));
+            setSelectedCommissions(newSet);
+        } else {
+            const newSet = new Set(selectedCommissions);
+            filteredCommissions.forEach(c => newSet.delete(c.id));
+            setSelectedCommissions(newSet);
+        }
+    };
+
+    const handleSelectOne = (id: string, checked: boolean) => {
+        const newSet = new Set(selectedCommissions);
+        if (checked) {
+            newSet.add(id);
+        } else {
+            newSet.delete(id);
+        }
+        setSelectedCommissions(newSet);
+    };
+
+    const handleBulkValidate = async () => {
+        if (selectedCommissions.size === 0) return;
+        setIsBulkLoading(true);
+        try {
+            const result = await validateMultipleCommissions(Array.from(selectedCommissions));
+            if (result?.error) {
+                toast.error(result.error);
+                return;
+            }
+            toast.success(`Se han validado ${result?.count || 0} comisiones`);
+            setSelectedCommissions(new Set());
+            loadCommissions();
+        } catch (error) {
+            toast.error('Error al validar masivamente');
+        } finally {
+            setIsBulkLoading(false);
+        }
+    };
+
+    const handleBulkPay = async () => {
+        if (selectedCommissions.size === 0) return;
+        setIsBulkLoading(true);
+        try {
+            const result = await markMultipleAsPaid(Array.from(selectedCommissions));
+            if (result?.error) {
+                toast.error(result.error);
+                return;
+            }
+            toast.success(`Se han pagado ${result?.count || 0} comisiones`);
+            setSelectedCommissions(new Set());
+            loadCommissions();
+        } catch (error) {
+            toast.error('Error al pagar masivamente');
+        } finally {
+            setIsBulkLoading(false);
+        }
+    };
+
     const getStatusBadge = (status: string) => {
         const styles = {
             pending: 'bg-yellow-100 text-yellow-700 border-yellow-200',
@@ -564,6 +639,37 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
                         </div>
                     </div>
 
+                    {/* Bulk Actions Bar */}
+                    {selectedCommissions.size > 0 && (
+                        <div className="flex items-center justify-between mb-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+                            <span className="text-sm font-medium text-indigo-800">
+                                {selectedCommissions.size} seleccionada(s)
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    size="sm"
+                                    onClick={handleBulkValidate}
+                                    disabled={isBulkLoading}
+                                    className="bg-indigo-600 hover:bg-indigo-700"
+                                >
+                                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                                    Validar
+                                </Button>
+                                {userRole === 'admin' && (
+                                    <Button
+                                        size="sm"
+                                        onClick={handleBulkPay}
+                                        disabled={isBulkLoading}
+                                        className="bg-green-600 hover:bg-green-700"
+                                    >
+                                        <DollarSign className="w-4 h-4 mr-2" />
+                                        Pagar
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Tabla */}
                     {loading ? (
                         <div className="text-center py-8 text-gray-500">Cargando comisiones...</div>
@@ -574,6 +680,14 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-gray-50">
+                                        <TableHead className="w-12 text-center">
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer"
+                                                checked={filteredCommissions.length > 0 && filteredCommissions.every(c => selectedCommissions.has(c.id))}
+                                                onChange={(e) => handleSelectAll(e.target.checked)}
+                                            />
+                                        </TableHead>
                                         <TableHead>Fecha</TableHead>
                                         {userRole === 'admin' && <TableHead>Agente</TableHead>}
                                         {userRole === 'admin' && <TableHead>Rol</TableHead>}
@@ -587,7 +701,15 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
                                 </TableHeader>
                                 <TableBody>
                                     {filteredCommissions.map((commission) => (
-                                        <TableRow key={commission.id}>
+                                        <TableRow key={commission.id} className={selectedCommissions.has(commission.id) ? 'bg-indigo-50/50' : ''}>
+                                            <TableCell className="text-center">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer"
+                                                    checked={selectedCommissions.has(commission.id)}
+                                                    onChange={(e) => handleSelectOne(commission.id, e.target.checked)}
+                                                />
+                                            </TableCell>
                                             <TableCell className="text-sm">
                                                 {new Date(commission.created_at).toLocaleDateString('es-ES')}
                                             </TableCell>

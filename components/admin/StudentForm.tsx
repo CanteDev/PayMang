@@ -220,9 +220,9 @@ export default function StudentForm({ student, onSuccess, trigger }: StudentForm
                 setAgreedPrice(pack.price);
                 
                 // Set default commissions for this sale
-                const cCloser = (pack.commission_closer > 0 ? pack.commission_closer : (globalRates?.closer || 0)) * 100;
-                const cCoach = (pack.commission_coach > 0 ? pack.commission_coach : (globalRates?.coach || 0)) * 100;
-                const cSetter = (pack.commission_setter > 0 ? pack.commission_setter : (globalRates?.setter || 0)) * 100;
+                const cCloser = (pack.commission_closer > 0 ? pack.commission_closer : (globalRates?.closer || 0));
+                const cCoach = (pack.commission_coach > 0 ? pack.commission_coach : (globalRates?.coach || 0));
+                const cSetter = (pack.commission_setter > 0 ? pack.commission_setter : (globalRates?.setter || 0));
                 
                 setSaleCommCloser(cCloser ? cCloser.toString() : '0');
                 setSaleCommCoach(cCoach ? cCoach.toString() : '0');

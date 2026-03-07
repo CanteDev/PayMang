@@ -183,9 +183,9 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
                 setSalePrice(pack.price);
                 
                 // Set default commissions
-                const cCloser = (pack.commission_closer && pack.commission_closer > 0 ? pack.commission_closer : (globalRates?.closer || 0)) * 100;
-                const cCoach = (pack.commission_coach && pack.commission_coach > 0 ? pack.commission_coach : (globalRates?.coach || 0)) * 100;
-                const cSetter = (pack.commission_setter && pack.commission_setter > 0 ? pack.commission_setter : (globalRates?.setter || 0)) * 100;
+                const cCloser = (pack.commission_closer && pack.commission_closer > 0 ? pack.commission_closer : (globalRates?.closer || 0));
+                const cCoach = (pack.commission_coach && pack.commission_coach > 0 ? pack.commission_coach : (globalRates?.coach || 0));
+                const cSetter = (pack.commission_setter && pack.commission_setter > 0 ? pack.commission_setter : (globalRates?.setter || 0));
                 
                 if (!editingSaleId) {
                     setSaleCommCloser(cCloser ? cCloser.toString() : '0');
