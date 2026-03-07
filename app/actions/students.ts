@@ -107,8 +107,8 @@ export async function createStudentAction(payload: any, salePayload?: any) {
 
             if (saleError) {
                 console.error('Failed to create initial sale:', saleError);
-                // Return success for student but with warning
-                return { success: true, data: newStudent, warning: 'Student created but failed to create sale' };
+                // Still return student data but surface the error clearly
+                return { success: false, error: `Alumno creado pero falló el pack: ${saleError.message}`, data: newStudent };
             }
 
             // 3. Generate initial pending installments
