@@ -84,7 +84,9 @@ export async function initiateSequraPayment(linkId: string) {
                     link_id: linkId,
                     token: ipnToken,
                 },
-                // NOTE: store_ref & operator_ref are ONLY for Multistore contract (physical stores) - not applicable here
+                // NOTE: store_ref & operator_ref required by this merchant's contract
+                store_ref: merchantId,           // Store identifier (merchantId for single-store)
+                operator_ref: linkId,            // Unique reference per order
             },
             merchant_reference: {
                 order_ref_1: linkId,
@@ -101,8 +103,8 @@ export async function initiateSequraPayment(linkId: string) {
                         total_with_tax: Math.round(activePrice * 100),
                         type: 'service',
                         downloadable: false,
-                        // Services contract: course/service duration
-                        ends_in: 365, // días de duración del servicio (1 año para formaciones)
+                        // Services contract: ISO8601 period format required (not integer)
+                        ends_in: 'P365D', // 1 year service duration in ISO 8601 period format
                         service_start_date: new Date().toISOString().split('T')[0],
                     }
                 ],
