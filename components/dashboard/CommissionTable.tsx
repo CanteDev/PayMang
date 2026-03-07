@@ -37,7 +37,8 @@ import {
     Users,
     ChevronLeft,
     ChevronRight,
-    Pencil
+    Pencil,
+    Download
 } from 'lucide-react';
 import { 
     validateCommission, 
@@ -128,6 +129,9 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
     // Bulk Actions State
     const [selectedCommissions, setSelectedCommissions] = useState<Set<string>>(new Set());
     const [isBulkLoading, setIsBulkLoading] = useState(false);
+    
+    // Export State
+    const [isExporting, setIsExporting] = useState(false);
 
     // Server-side totals (independent of pagination)
     const [statsTotalAmount, setStatsTotalAmount] = useState(0);
@@ -512,6 +516,90 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
         );
     };
 
+    const handleExportExcel = async () => {
+        setIsExporting(true);
+        try {
+            // Replicate exactly the data query but WITHOUT pagination
+            let query = supabase
+                .from('commissions')
+                .select(`
+                  *,
+                  sale:sales(
+                    *,
+                    pack:packs(name),
+                    student:students(email, full_name)
+                  ),
+                  agent:profiles!agent_id(full_name, email, role)
+                `)
+                .order('created_at', { ascending: false });
+
+            // Apply Roles Filter
+            if (userRole !== 'admin' && userId) query = query.eq('agent_id', userId);
+            
+            // Apply other filters
+            if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+            if (userRole === 'admin' && agentFilter !== 'all') query = query.eq('agent_id', agentFilter);
+            
+            if (selectedMonth !== 'all') {
+                const [year, month] = selectedMonth.split('-');
+                const startDate = new Date(parseInt(year), parseInt(month) - 1, 1).toISOString();
+                const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59).toISOString();
+                query = query.gte('created_at', startDate).lte('created_at', endDate);
+            }
+
+            const { data, error } = await query;
+            if (error) throw error;
+            if (!data || data.length === 0) {
+                toast.error('No hay datos para exportar con estos filtros');
+                return;
+            }
+
+            // Headers for CSV
+            const headers = ['Fecha', 'Agente', 'Rol', 'Estudiante', 'Pack', 'Pasarela', 'Monto (€)', 'Estado', 'Notas y Errores'];
+            
+            // Rows
+            const rows = data.map((c: any) => {
+                const date = new Date(c.created_at).toLocaleDateString('es-ES');
+                const agent = c.agent?.full_name || c.agent?.email || '';
+                const role = c.agent?.role || c.agent_role || '';
+                const student = c.sale?.student?.full_name || c.sale?.student?.email || '';
+                const pack = c.sale?.pack?.name || '';
+                const gateway = c.sale?.gateway || '';
+                const amount = Number(c.amount).toFixed(2).replace('.', ','); // Use localized decimal
+                const status = c.status;
+                const note = c.incidence_note || '';
+
+                // Escape commas/quotes inside fields
+                return [date, agent, role, student, pack, gateway, amount, status, note]
+                    .map(field => `"${String(field).replace(/"/g, '""')}"`)
+                    .join(';');
+            });
+
+            // Combine Headers + Rows
+            const csvContent = headers.join(';') + '\n' + rows.join('\n');
+            
+            // Add BOM for Excel UTF-8 recognition
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
+            // Trigger download automatically
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `comisiones_export_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            toast.success('Exportación completa');
+        } catch (err) {
+            console.error('Error exportando Excel:', err);
+            toast.error('Error al exportar los datos');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     const filteredCommissions = commissions;
 
     // Stats now come from server-side totals (see loadTotals)
@@ -533,23 +621,35 @@ export default function CommissionTable({ userRole, userId }: CommissionTablePro
         <>
             <Card className="w-full">
                 <CardHeader>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <CardTitle className="flex items-center space-x-2">
                             <DollarSign className="w-5 h-5" />
                             <span>Comisiones</span>
                         </CardTitle>
-                        {userRole === 'admin' && (
-                            <div className="flex items-center space-x-4">
-                                <div className="text-sm">
-                                    <span className="text-gray-600">Total: </span>
-                                    <span className="font-semibold">{totalAmount.toFixed(2)}€</span>
+                        <div className="flex items-center gap-4">
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 gap-1.5 border-green-200 text-green-700 hover:bg-green-50"
+                                onClick={handleExportExcel}
+                                disabled={isExporting}
+                            >
+                                <Download className="w-4 h-4" />
+                                {isExporting ? 'Exportando...' : 'Exportar a Excel'}
+                            </Button>
+                            {userRole === 'admin' && (
+                                <div className="flex items-center space-x-4 bg-gray-50 border px-3 py-1.5 rounded-lg">
+                                    <div className="text-sm">
+                                        <span className="text-gray-600">Total: </span>
+                                        <span className="font-semibold">{totalAmount.toFixed(2)}€</span>
+                                    </div>
+                                    <div className="text-sm">
+                                        <span className="text-gray-600">Pendiente: </span>
+                                        <span className="font-semibold text-blue-600">{pendingAmount.toFixed(2)}€</span>
+                                    </div>
                                 </div>
-                                <div className="text-sm">
-                                    <span className="text-gray-600">Pendiente: </span>
-                                    <span className="font-semibold text-blue-600">{pendingAmount.toFixed(2)}€</span>
-                                </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
