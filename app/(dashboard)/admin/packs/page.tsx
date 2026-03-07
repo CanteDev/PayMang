@@ -214,13 +214,16 @@ export default function AdminPacksPage() {
                             <Package className="w-5 h-5" />
                             <span>Listado de Packs</span>
                         </CardTitle>
-                        <Button
-                            onClick={() => router.push('/admin/settings?tab=payment')}
-                            className="bg-blue-600 hover:bg-blue-700 font-medium"
-                        >
-                            <RefreshCw className="w-4 h-4 mr-2" />
-                            Sincronizar Productos
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <PackForm onSuccess={loadPacks} />
+                            <Button
+                                variant="outline"
+                                onClick={() => router.push('/admin/settings?tab=payment')}
+                            >
+                                <RefreshCw className="w-4 h-4 mr-2" />
+                                Sincronizar Productos
+                            </Button>
+                        </div>
                     </div>
                 </CardHeader>
                 <CardContent>
