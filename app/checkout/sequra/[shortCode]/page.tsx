@@ -12,7 +12,7 @@ export default function SequraCheckoutPage() {
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [formHtml, setFormHtml] = useState<string | null>(null);
+    const [iframeUrl, setIframeUrl] = useState<string | null>(null);
 
     const initialized = useRef(false);
 
@@ -23,10 +23,21 @@ export default function SequraCheckoutPage() {
         const startCheckout = async () => {
             try {
                 const result = await initiateSequraPayment(shortCode);
-                if (result.success === false) {
+                if (!result.success) {
                     setError(result.error || 'Error desconocido de SeQura');
                 } else {
-                    setFormHtml(result.form);
+                    // form_v2 returns HTML with an iframe. Extract the src directly.
+                    // SeQura iframe has: display:none + JS to unhide it - unreliable in Next.js
+                    // We use the pumbaa_form URL directly as iframe src instead.
+                    const form = (result as any).form as string;
+                    const match = form?.match(/src="([^"]*pumbaa_form[^"]*)"/);
+                    if (match?.[1]) {
+                        setIframeUrl(match[1]);
+                    } else if ((result as any).iframeUrl) {
+                        setIframeUrl((result as any).iframeUrl);
+                    } else {
+                        setError('No se pudo obtener el formulario de SeQura');
+                    }
                 }
             } catch (err: any) {
                 console.error('Checkout error:', err);
@@ -40,22 +51,6 @@ export default function SequraCheckoutPage() {
             startCheckout();
         }
     }, [shortCode]);
-
-    // Helper to execute scripts in the form HTML
-    useEffect(() => {
-        if (formHtml) {
-            // Create a range to parse HTML
-            const range = document.createRange();
-            range.selectNode(document.body);
-            const fragment = range.createContextualFragment(formHtml);
-
-            const container = document.getElementById('sequra-form-container');
-            if (container) {
-                container.innerHTML = '';
-                container.appendChild(fragment);
-            }
-        }
-    }, [formHtml]);
 
     if (loading) {
         return (
@@ -80,9 +75,23 @@ export default function SequraCheckoutPage() {
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-            <div id="sequra-form-container" className="w-full max-w-4xl bg-white rounded-xl shadow-lg min-h-[600px] flex flex-col relative overflow-hidden">
-                {/* Form will be injected here */}
-            </div>
+            {iframeUrl && (
+                <iframe
+                    src={iframeUrl}
+                    title="SeQura - Paga Fraccionado"
+                    allow="camera; payment"
+                    style={{
+                        width: '100%',
+                        maxWidth: '680px',
+                        height: '650px',
+                        border: 'none',
+                        borderRadius: '12px',
+                        boxShadow: '0 4px 24px rgba(0,0,0,0.10)',
+                        background: '#fff',
+                        display: 'block',
+                    }}
+                />
+            )}
             <p className="mt-4 text-xs text-gray-400">
                 Pago seguro procesado por SeQura
             </p>
