@@ -84,15 +84,14 @@ export async function initiateSequraPayment(linkId: string) {
                     link_id: linkId,
                     token: ipnToken,
                 },
-                store_ref: merchantId,        // Requerido: referencia de la tienda
-                operator_ref: paymentLink.student.email, // Requerido: operador (usamos email del alumno)
+                // NOTE: store_ref & operator_ref are ONLY for Multistore contract (physical stores) - not applicable here
             },
             merchant_reference: {
                 order_ref_1: linkId,
             },
             cart: {
                 currency: 'EUR',
-                gift: false, // Requerido: indica si es un regalo
+                gift: false,
                 items: [
                     {
                         reference: activeReference,
@@ -101,8 +100,10 @@ export async function initiateSequraPayment(linkId: string) {
                         quantity: 1,
                         total_with_tax: Math.round(activePrice * 100),
                         type: 'service',
-                        downloadable: false,    // Requerido: no es descargable (servicio presencial/online)
-                        ends_in: 30,            // Requerido: duración del servicio en días
+                        downloadable: false,
+                        // Services contract: course/service duration
+                        ends_in: 365, // días de duración del servicio (1 año para formaciones)
+                        service_start_date: new Date().toISOString().split('T')[0],
                     }
                 ],
                 order_total_with_tax: Math.round(activePrice * 100),
@@ -111,39 +112,37 @@ export async function initiateSequraPayment(linkId: string) {
                 email: paymentLink.student.email,
                 given_names: givenNames,
                 surnames: surnames,
-                logged_in: false,       // Requerido: alumno no logueado en la tienda
-                language_code: 'es',    // Requerido: idioma del cliente
-                ip_number: '0.0.0.0',  // Requerido: IP (no disponible server-side, valor placeholder)
-                user_agent: 'Mozilla/5.0 PayMang-checkout/2.0', // Requerido: user agent
+                logged_in: false,
+                language_code: 'es-ES', // formato iso correcto según docs
+                ip_number: '0.0.0.0',   // no disponible server-side
+                user_agent: 'Mozilla/5.0 PayMang-checkout/2.0',
             },
-            // Delivery address obligatoria aunque sea servicio digital
+            // Obligatorio aunque sea servicio digital (puede ir vacío según ejemplo de docs)
             delivery_address: {
                 given_names: givenNames,
                 surnames: surnames,
                 company: '',
-                address_line_1: 'Digital Service',
+                address_line_1: 'Servicio Digital',
                 address_line_2: '',
                 postal_code: '00000',
                 city: 'Online',
                 country_code: 'ES',
             },
-            // Invoice address obligatoria
             invoice_address: {
                 given_names: givenNames,
                 surnames: surnames,
                 company: '',
-                address_line_1: 'Digital Service',
+                address_line_1: '',
                 address_line_2: '',
-                postal_code: '00000',
-                city: 'Online',
+                postal_code: '',
+                city: '',
                 country_code: 'ES',
             },
-            // Delivery method obligatorio
             delivery_method: {
                 name: 'Servicio Digital',
-                days: 0,  // 0 días = entrega inmediata/digital
+                days: 'Inmediato', // string según el ejemplo oficial de la documentación
                 provider: 'Digital',
-                tracking_number: '',
+                home_delivery: false,
             },
             gui: {
                 layout: 'responsive',
@@ -152,9 +151,9 @@ export async function initiateSequraPayment(linkId: string) {
                 name: CONFIG.APP.NAME,
                 version: '2.0.0',
                 plugin_version: '2.0.0',
-                uname: 'Linux PayMang/2.0',    // Requerido: info del SO del servidor
-                db_name: 'PostgreSQL',          // Requerido: nombre de la BD
-                db_version: '15',               // Requerido: versión de la BD
+                uname: 'Linux PayMang/2.0',
+                db_name: 'PostgreSQL',
+                db_version: '15',
             },
         }
     };
