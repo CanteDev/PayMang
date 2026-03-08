@@ -207,199 +207,219 @@ export default function AdminStudentsPage() {
         return { key, label };
     });
 
-    return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-semibold text-gray-900">Alumnos</h1>
-                <p className="text-gray-600 mt-1">Gestión de estudiantes y asignaciones</p>
-            </div>
+            const updateSingleStudent = async (studentId: string) => {
+                const { data, error } = await supabase
+                    .from('students')
+                    .select(`
+                        *,
+                        coach:profiles!assigned_coach_id(full_name),
+                        payments(amount, status, due_date),
+                        sales(total_amount, status, gateway, amount_collected)
+                    `)
+                    .eq('id', studentId)
+                    .single();
 
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center space-x-2">
-                            <Users className="w-5 h-5" />
-                            <span>Listado de Alumnos</span>
-                        </CardTitle>
-                        <StudentForm onSuccess={loadStudents} />
+                if (data && !error) {
+                    setStudents(prev => prev.map(s => s.id === studentId ? data as any : s));
+                }
+            };
+            
+            return (
+                <div className="space-y-6">
+                    <div>
+                        <h1 className="text-3xl font-semibold text-gray-900">Alumnos</h1>
+                        <p className="text-gray-600 mt-1">Gestión de estudiantes y asignaciones</p>
                     </div>
-                </CardHeader>
-                <CardContent>
-                    {/* Filters Row */}
-                    <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between items-start md:items-center bg-gray-50/50 p-4 rounded-lg border border-gray-100">
-                        <div className="flex flex-wrap gap-4 w-full md:w-auto">
-                            {/* Period Filter */}
-                            <div className="flex items-center gap-2">
-                                <Calendar className="w-4 h-4 text-gray-500" />
-                                <select
-                                    value={selectedMonth}
-                                    onChange={(e) => setSelectedMonth(e.target.value)}
-                                    className="h-9 rounded-md border text-sm bg-white px-2 py-1 max-w-[160px] focus:ring-2 focus:ring-slate-200 focus:border-slate-400 outline-none"
-                                >
-                                    <option value="all">Todo el periodo</option>
-                                    {availableMonths.map(month => (
-                                        <option key={month.key} value={month.key}>
-                                            {month.label}
-                                        </option>
-                                    ))}
-                                </select>
+
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center space-x-2">
+                                    <Users className="w-5 h-5" />
+                                    <span>Listado de Alumnos</span>
+                                </CardTitle>
+                                <StudentForm onSuccess={loadStudents} />
                             </div>
+                        </CardHeader>
+                        <CardContent>
+                            {/* Filters Row */}
+                            <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between items-start md:items-center bg-gray-50/50 p-4 rounded-lg border border-gray-100">
+                                <div className="flex flex-wrap gap-4 w-full md:w-auto">
+                                    {/* Period Filter */}
+                                    <div className="flex items-center gap-2">
+                                        <Calendar className="w-4 h-4 text-gray-500" />
+                                        <select
+                                            value={selectedMonth}
+                                            onChange={(e) => setSelectedMonth(e.target.value)}
+                                            className="h-9 rounded-md border text-sm bg-white px-2 py-1 max-w-[160px] focus:ring-2 focus:ring-slate-200 focus:border-slate-400 outline-none"
+                                        >
+                                            <option value="all">Todo el periodo</option>
+                                            {availableMonths.map(month => (
+                                                <option key={month.key} value={month.key}>
+                                                    {month.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
 
-                            {/* Coach Filter */}
-                            <div className="flex items-center gap-2 w-full md:w-[200px]">
-                                <MultiSelect
-                                    options={[
-                                        { label: 'Sin asignar', value: 'unassigned' },
-                                        ...coaches.map(c => ({ label: c.full_name, value: c.id }))
-                                    ]}
-                                    selected={coachFilter}
-                                    onChange={setCoachFilter}
-                                    placeholder="Todos los coaches"
-                                    icon={<User className="w-4 h-4" />}
-                                />
+                                    {/* Coach Filter */}
+                                    <div className="flex items-center gap-2 w-full md:w-[200px]">
+                                        <MultiSelect
+                                            options={[
+                                                { label: 'Sin asignar', value: 'unassigned' },
+                                                ...coaches.map(c => ({ label: c.full_name, value: c.id }))
+                                            ]}
+                                            selected={coachFilter}
+                                            onChange={setCoachFilter}
+                                            placeholder="Todos los coaches"
+                                            icon={<User className="w-4 h-4" />}
+                                        />
+                                    </div>
+
+                                    {/* Status Filter */}
+                                    <div className="flex items-center gap-2 w-full md:w-[180px]">
+                                        <MultiSelect
+                                            options={[
+                                                { label: 'Activo', value: 'active' },
+                                                { label: 'Inactivo', value: 'inactive' },
+                                                { label: 'Pausado', value: 'paused' },
+                                                { label: 'Finalizado', value: 'finished' },
+                                                { label: 'Impago', value: 'defaulted' }
+                                            ]}
+                                            selected={statusFilter}
+                                            onChange={setStatusFilter}
+                                            placeholder="Todos los estados"
+                                            icon={<Filter className="w-4 h-4" />}
+                                        />
+                                    </div>
+
+                                    {/* Moroso Filter */}
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant={morosoFilter ? 'destructive' : 'outline'}
+                                            size="sm"
+                                            className="h-9"
+                                            onClick={() => setMorosoFilter(!morosoFilter)}
+                                        >
+                                            Morosos
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Search */}
+                                <div className="relative w-full md:w-64">
+                                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                                    <Input
+                                        placeholder="Buscar por nombre o email..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="pl-9 h-9 bg-white"
+                                    />
+                                </div>
                             </div>
+                            {/* Error Display */}
+                            {error && (
+                                <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex justify-between items-center">
+                                    <span>{error}</span>
+                                    <Button variant="ghost" size="sm" onClick={() => loadStudents()} className="h-8 hover:bg-red-100">
+                                        Reintentar
+                                    </Button>
+                                </div>
+                            )}
 
-                            {/* Status Filter */}
-                            <div className="flex items-center gap-2 w-full md:w-[180px]">
-                                <MultiSelect
-                                    options={[
-                                        { label: 'Activo', value: 'active' },
-                                        { label: 'Inactivo', value: 'inactive' },
-                                        { label: 'Pausado', value: 'paused' },
-                                        { label: 'Finalizado', value: 'finished' },
-                                        { label: 'Impago', value: 'defaulted' }
-                                    ]}
-                                    selected={statusFilter}
-                                    onChange={setStatusFilter}
-                                    placeholder="Todos los estados"
-                                    icon={<Filter className="w-4 h-4" />}
-                                />
-                            </div>
-
-                            {/* Moroso Filter */}
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    variant={morosoFilter ? 'destructive' : 'outline'}
-                                    size="sm"
-                                    className="h-9"
-                                    onClick={() => setMorosoFilter(!morosoFilter)}
-                                >
-                                    Morosos
-                                </Button>
-                            </div>
-                        </div>
-
-                        {/* Search */}
-                        <div className="relative w-full md:w-64">
-                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                            <Input
-                                placeholder="Buscar por nombre o email..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-9 h-9 bg-white"
-                            />
-                        </div>
-                    </div>
-                    {/* Error Display */}
-                    {error && (
-                        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex justify-between items-center">
-                            <span>{error}</span>
-                            <Button variant="ghost" size="sm" onClick={() => loadStudents()} className="h-8 hover:bg-red-100">
-                                Reintentar
-                            </Button>
-                        </div>
-                    )}
-
-                    {/* Table */}
-                    {loading ? (
-                        <div className="text-center py-10">Cargando...</div>
-                    ) : (
-                        <div className="border rounded-lg overflow-hidden">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-gray-50">
-                                        <TableHead>Nombre</TableHead>
-                                        <TableHead>Email</TableHead>
-                                        <TableHead>Coach</TableHead>
-                                        <TableHead>Progreso Pago</TableHead>
-                                        <TableHead>Estado</TableHead>
-                                        <TableHead className="text-right">Acciones</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {filteredStudents.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                                                No se encontraron alumnos con estos filtros
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        filteredStudents.map((student) => {
-                                            const progress = getPaymentProgress(student);
-                                            const yesterday = new Date();
-                                            yesterday.setDate(yesterday.getDate() - 1);
-                                            yesterday.setHours(0, 0, 0, 0);
-                                            const totalAgreed = student.sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
-                                            const gatewaySalesTotal = student.sales?.filter(s => s.status === 'paid').reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
-                                            const fullyPaidViaGateway = totalAgreed > 0 && gatewaySalesTotal >= totalAgreed;
-                                            const isOverdue = !fullyPaidViaGateway && student.payments?.some(p =>
-                                                p.status === 'pending' && new Date(p.due_date) < yesterday
-                                            );
-
-                                            return (
-                                                <TableRow
-                                                    key={student.id}
-                                                    className={isOverdue ? 'bg-red-50/50 hover:bg-red-50' : ''}
-                                                >
-                                                    <TableCell className="font-medium">{student.full_name}</TableCell>
-                                                    <TableCell>{student.email}</TableCell>
-                                                    <TableCell>
-                                                        {student.coach?.full_name ? (
-                                                            <div className="flex items-center space-x-2">
-                                                                <User className="w-4 h-4 text-gray-400" />
-                                                                <span>{student.coach.full_name}</span>
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-gray-400 text-sm italic">Sin asignar</span>
-                                                        )}
+                            {/* Table */}
+                            {loading ? (
+                                <div className="text-center py-10">Cargando...</div>
+                            ) : (
+                                <div className="border rounded-lg overflow-hidden">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="bg-gray-50">
+                                                <TableHead>Nombre</TableHead>
+                                                <TableHead>Email</TableHead>
+                                                <TableHead>Coach</TableHead>
+                                                <TableHead>Progreso Pago</TableHead>
+                                                <TableHead>Estado</TableHead>
+                                                <TableHead className="text-right">Acciones</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {filteredStudents.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                                                        No se encontraron alumnos con estos filtros
                                                     </TableCell>
-                                                    <TableCell className="w-48">
-                                                        <div className="space-y-1">
-                                                            <div className="flex justify-between text-xs text-gray-600">
-                                                                <span>{progress.paid}€ / {progress.total}€</span>
-                                                                <span>{progress.percentage}%</span>
-                                                            </div>
-                                                            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                                                                <div
-                                                                    className={`h-full rounded-full transition-all duration-500 ${progress.percentage >= 100 ? 'bg-green-500' : 'bg-blue-500'
-                                                                        }`}
-                                                                    style={{ width: `${progress.percentage}%` }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <div className="flex flex-col gap-1">
-                                                            {getStatusBadge(student.status)}
-                                                            {isOverdue && (
-                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-800 border border-red-200">
-                                                                    Moroso
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <div className="flex justify-end gap-2">
-                                                            <StudentPaymentDetails student={student} />
-                                                            <StudentForm
-                                                                student={student}
-                                                                onSuccess={loadStudents}
-                                                                trigger={
-                                                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                                                        <Edit2 className="h-4 w-4" />
-                                                                    </Button>
-                                                                }
-                                                            />
+                                                </TableRow>
+                                            ) : (
+                                                filteredStudents.map((student) => {
+                                                    const progress = getPaymentProgress(student);
+                                                    const yesterday = new Date();
+                                                    yesterday.setDate(yesterday.getDate() - 1);
+                                                    yesterday.setHours(0, 0, 0, 0);
+                                                    const totalAgreed = student.sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
+                                                    const gatewaySalesTotal = student.sales?.filter(s => s.status === 'paid').reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
+                                                    const fullyPaidViaGateway = totalAgreed > 0 && gatewaySalesTotal >= totalAgreed;
+                                                    const isOverdue = !fullyPaidViaGateway && student.payments?.some(p =>
+                                                        p.status === 'pending' && new Date(p.due_date) < yesterday
+                                                    );
+
+                                                    return (
+                                                        <TableRow
+                                                            key={student.id}
+                                                            className={isOverdue ? 'bg-red-50/50 hover:bg-red-50' : ''}
+                                                        >
+                                                            <TableCell className="font-medium">{student.full_name}</TableCell>
+                                                            <TableCell>{student.email}</TableCell>
+                                                            <TableCell>
+                                                                {student.coach?.full_name ? (
+                                                                    <div className="flex items-center space-x-2">
+                                                                        <User className="w-4 h-4 text-gray-400" />
+                                                                        <span>{student.coach.full_name}</span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-gray-400 text-sm italic">Sin asignar</span>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="w-48">
+                                                                <div className="space-y-1">
+                                                                    <div className="flex justify-between text-xs text-gray-600">
+                                                                        <span>{progress.paid}€ / {progress.total}€</span>
+                                                                        <span>{progress.percentage}%</span>
+                                                                    </div>
+                                                                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                                        <div
+                                                                            className={`h-full rounded-full transition-all duration-500 ${progress.percentage >= 100 ? 'bg-green-500' : 'bg-blue-500'
+                                                                                }`}
+                                                                            style={{ width: `${progress.percentage}%` }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex flex-col gap-1">
+                                                                    {getStatusBadge(student.status)}
+                                                                    {isOverdue && (
+                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-800 border border-red-200">
+                                                                            Moroso
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <div className="flex justify-end gap-2">
+                                                                    <StudentPaymentDetails 
+                                                                        student={student} 
+                                                                        onUpdate={() => updateSingleStudent(student.id)} 
+                                                                    />
+                                                                    <StudentForm
+                                                                        student={student}
+                                                                        onSuccess={() => updateSingleStudent(student.id)}
+                                                                        trigger={
+                                                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                                                                <Edit2 className="h-4 w-4" />
+                                                                            </Button>
+                                                                        }
+                                                                    />
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
