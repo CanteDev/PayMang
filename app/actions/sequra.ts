@@ -168,38 +168,80 @@ export async function initiateSequraPayment(linkId: string) {
             return { success: false, error: 'SeQura no devolvió referencia de pedido' };
         }
 
-        // 8. Crear la venta en BD DESPUÉS de recibir orderRef (evitar registros zombie)
-        // Status 'pending' hasta que SeQura confirme via IPN
-        const { data: sale, error: saleError } = await supabase
+        // 8. Buscar si ya existe una venta para este alumno + pack (ej. añadida manualmente)
+        // para evitar duplicados si el alumno ya tenía deuda registrada.
+        const { data: existingSale } = await supabase
             .from('sales')
-            .insert({
-                student_id: paymentLink.student.id,
-                pack_id: paymentLink.pack.id,
-                gateway: 'sequra',
-                total_amount: activePrice,
-                amount_collected: 0,
-                status: 'pending',
-                transaction_id: orderRef, // UUID real de SeQura
-                sequra_order_ref: orderRef,
-                metadata: {
-                    ...paymentLink.metadata,
-                    pack_offer_id: paymentLink.pack_offer_id,
-                    link_id: linkId,
-                    product_code: null, // Se completará cuando llegue el IPN
-                },
-                sequra_payment_status: {
-                    initial_70: false,
-                    second_15: false,
-                    final_15: false,
-                }
-            } as any)
-            .select()
-            .single();
+            .select('id, gateway, status')
+            .eq('student_id', paymentLink.student.id)
+            .eq('pack_id', paymentLink.pack.id)
+            .in('status', ['pending', 'partial'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-        if (saleError || !sale) {
-            console.error('Error creating SeQura sale after solicitation:', saleError);
-            // No bloqueamos el flujo: el IPN creará la venta si falla aquí,
-            // pero es mejor tener el registro pending desde el inicio.
+        let sale: any = null;
+        let saleError: any = null;
+
+        if (existingSale) {
+            // Existe una venta previa → actualizar con la referencia de SeQura
+            // sin crear un duplicado. Cambiamos gateway a 'sequra' para reflejar
+            // que el pago se va a gestionar por SeQura.
+            const { data: updated, error: updateErr } = await supabase
+                .from('sales')
+                .update({
+                    gateway: 'sequra',
+                    transaction_id: orderRef,
+                    sequra_order_ref: orderRef,
+                    total_amount: activePrice,
+                    metadata: {
+                        ...paymentLink.metadata,
+                        pack_offer_id: paymentLink.pack_offer_id,
+                        link_id: linkId,
+                        product_code: null,
+                    },
+                    sequra_payment_status: {
+                        initial_70: false,
+                        second_15: false,
+                        final_15: false,
+                    }
+                } as any)
+                .eq('id', existingSale.id)
+                .select()
+                .single();
+            sale = updated;
+            saleError = updateErr;
+            if (updateErr) console.error('Error updating existing sale for SeQura:', updateErr);
+        } else {
+            // No existe venta previa → crear nueva
+            const { data: inserted, error: insertErr } = await supabase
+                .from('sales')
+                .insert({
+                    student_id: paymentLink.student.id,
+                    pack_id: paymentLink.pack.id,
+                    gateway: 'sequra',
+                    total_amount: activePrice,
+                    amount_collected: 0,
+                    status: 'pending',
+                    transaction_id: orderRef,
+                    sequra_order_ref: orderRef,
+                    metadata: {
+                        ...paymentLink.metadata,
+                        pack_offer_id: paymentLink.pack_offer_id,
+                        link_id: linkId,
+                        product_code: null,
+                    },
+                    sequra_payment_status: {
+                        initial_70: false,
+                        second_15: false,
+                        final_15: false,
+                    }
+                } as any)
+                .select()
+                .single();
+            sale = inserted;
+            saleError = insertErr;
+            if (insertErr) console.error('Error creating SeQura sale after solicitation:', insertErr);
         }
 
         // 9. Obtener formulario de identificación para mostrarlo al alumno
