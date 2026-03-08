@@ -195,8 +195,9 @@ export default function UnifiedLinkGenerator() {
 
         const { data } = await supabase
             .from('sales')
-            .select('id, pack_id, total_amount, amount_collected')
-            .eq('student_id', selectedStudent);
+            .select('id, pack_id, total_amount, amount_collected, closer_id, coach_id, setter_id')
+            .eq('student_id', selectedStudent)
+            .order('created_at', { ascending: false });
 
         if (data) {
             setStudentSales(data);
@@ -206,6 +207,17 @@ export default function UnifiedLinkGenerator() {
     useEffect(() => {
         fetchStudentSales();
     }, [selectedStudent, supabase]);
+
+    // Precargar closer / coach / setter cuando se selecciona un pack concreto
+    useEffect(() => {
+        if (!selectedPack) return;
+        const sale = studentSales.find((s: any) => s.pack_id === selectedPack) as any;
+        if (sale) {
+            if (sale.closer_id) setSelectedCloser(sale.closer_id);
+            if (sale.coach_id)  setAssignedCoach(sale.coach_id);
+            if (sale.setter_id) setSelectedSetter(sale.setter_id);
+        }
+    }, [selectedPack, studentSales]);
 
     // Calculate which packs should be visible for the selected student
     const visiblePacks = packs.filter(pack => {
