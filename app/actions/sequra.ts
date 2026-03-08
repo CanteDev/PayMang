@@ -179,19 +179,42 @@ export async function initiateSequraPayment(linkId: string) {
             return { success: false, error: 'SeQura no devolvió referencia de pedido' };
         }
 
-        // 8. Buscar si ya existe una venta para este alumno + pack (ej. añadida manualmente)
-        // para evitar duplicados si el alumno ya tenía deuda registrada.
+        // 8. Buscar la venta a actualizar con el orderRef de SeQura
+        // PRIORIDAD 1: usar target_sale_id del metadata del link (igual que Hotmart)
+        //   → es el ID exacto de la venta manual ya registrada para este cobro
+        // PRIORIDAD 2: fallback por student_id + pack_id + status pending/partial
         // IMPORTANTE: usar serviceClient (sin RLS) porque el checkout es ruta pública sin sesión.
         const serviceClient = createServiceClient() as any;
-        const { data: existingSale } = await serviceClient
-            .from('sales')
-            .select('id, gateway, status')
-            .eq('student_id', paymentLink.student.id)
-            .eq('pack_id', paymentLink.pack.id)
-            .in('status', ['pending', 'partial'])
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+
+        const targetSaleId = (paymentLink as any).metadata?.target_sale_id;
+        let existingSale: any = null;
+
+        if (targetSaleId) {
+            const { data } = await serviceClient
+                .from('sales')
+                .select('id, gateway, status')
+                .eq('id', targetSaleId)
+                .in('status', ['pending', 'partial'])
+                .maybeSingle();
+            existingSale = data;
+            if (existingSale) {
+                console.log(`SeQura: usando target_sale_id=${targetSaleId} del link metadata`);
+            }
+        }
+
+        if (!existingSale) {
+            // Fallback: búsqueda por student + pack (para links sin target_sale_id)
+            const { data } = await serviceClient
+                .from('sales')
+                .select('id, gateway, status')
+                .eq('student_id', paymentLink.student.id)
+                .eq('pack_id', paymentLink.pack.id)
+                .in('status', ['pending', 'partial'])
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            existingSale = data;
+        }
 
         let sale: any = null;
         let saleError: any = null;
