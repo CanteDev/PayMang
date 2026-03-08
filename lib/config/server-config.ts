@@ -1,8 +1,3 @@
-import { createClient } from '@/lib/supabase/client'; // Client-side or Server?
-// We need a server-side helper primarily.
-// Let's create `lib/config/server-config.ts` for server actions.
-
-import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { CONFIG } from '@/config/app.config';
 
@@ -27,21 +22,17 @@ export async function getAppConfig(key: string, defaultValue?: any): Promise<any
     }
 
     try {
+        // USAR SIEMPRE ADMIN CLIENT PARA LEER CONFIGURACIÓN (Bypass RLS)
+        // La configuración del sistema (como API keys) se necesita incluso
+        // en rutas públicas (ej. checkout público) donde no hay sesión de usuario.
+        // Al ser código server-side, es seguro usar el service_role_key.
         let supabase;
-        // Detect if we are running in a clear script context without Next.js React tree 
-        // to avoid throwing the uncatchable "cookies outside scope" error entirely.
-        const isCliScript = !process.env.NEXT_PHASE && process.env.npm_lifecycle_event !== 'dev' && process.env.NODE_ENV !== 'production';
-
         try {
-            if (isCliScript) {
-                // If we are definitely in a script, skip createServerClient and go straight to Admin
-                supabase = getSupabaseAdmin();
-            } else {
-                supabase = await createServerClient();
-            }
-        } catch (err: any) {
-            // Fallback just in case
             supabase = getSupabaseAdmin();
+        } catch (err: any) {
+            console.error('Error init admin client for config:', err);
+            // Si falta la env var, fallará
+            return defaultValue !== undefined ? defaultValue : getStaticFallback(key);
         }
 
         const { data, error } = await supabase
