@@ -135,23 +135,50 @@ export async function POST(request: NextRequest) {
             return new Response('Confirmation failed', { status: 200 });
         }
 
-        // 3. Buscar o crear la venta
-        // La venta pudo crearse en estado 'pending' en initiateSequraPayment
+        // 3. Buscar o crear la venta — mismo patrón que Hotmart/Stripe
+        // PRIORIDAD 1: target_sale_id en metadata del link (venta manual pre-asignada)
+        // PRIORIDAD 2: búsqueda fuzzy por student + pack con status pending
+        // PRIORIDAD 3: crear nueva venta sealed (pago ya confirmado por SeQura)
         let sale;
+        let existingSale = null;
 
-        const { data: existingSale } = await supabase
-            .from('sales')
-            .select('*')
-            .eq('transaction_id', orderRef)
-            .eq('gateway', 'sequra')
-            .single();
+        if (target_sale_id) {
+            const { data } = await supabase
+                .from('sales')
+                .select('*')
+                .eq('id', target_sale_id)
+                .in('status', ['pending', 'partial'])
+                .maybeSingle();
+            existingSale = data;
+            if (existingSale) {
+                console.log(`SeQura IPN: usando target_sale_id=${target_sale_id} del link`);
+            }
+        }
+
+        if (!existingSale) {
+            // Fallback: buscar por student_id + pack_id (venta pendiente existente sin target_sale_id)
+            const { data } = await supabase
+                .from('sales')
+                .select('*')
+                .eq('student_id', link.student_id)
+                .eq('pack_id', link.pack_id)
+                .in('status', ['pending', 'partial'])
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            existingSale = data;
+        }
 
         if (existingSale) {
-            // Actualizar venta pending → paid
+            // Actualizar venta existente → paid
             const { data: updatedSale } = await supabase
                 .from('sales')
                 .update({
                     status: 'paid',
+                    gateway: 'sequra',
+                    transaction_id: orderRef,
+                    sequra_order_ref: orderRef,
+                    amount_collected: packPrice,
                     metadata: {
                         ...existingSale.metadata,
                         sequra_product_code: productCode,
@@ -168,9 +195,9 @@ export async function POST(request: NextRequest) {
                 .select()
                 .single();
             sale = updatedSale;
-            console.log(`📝 SeQura: Venta existente ${existingSale.id} actualizada a 'paid'`);
+            console.log(`📝 SeQura IPN: Venta ${existingSale.id} (${existingSale.gateway}) → paid con orderRef ${orderRef}`);
         } else {
-            // Crear venta nueva (si no se creó en initiateSequraPayment)
+            // No había venta previa → crear nueva directamente como paid
             const { data: newSale, error: saleError } = await supabase
                 .from('sales')
                 .insert({
@@ -178,7 +205,7 @@ export async function POST(request: NextRequest) {
                     pack_id: link.pack_id,
                     gateway: 'sequra',
                     total_amount: packPrice,
-                    amount_collected: packPrice, // SeQura garantiza el pago completo
+                    amount_collected: packPrice,
                     status: 'paid',
                     transaction_id: orderRef,
                     sequra_order_ref: orderRef,
@@ -204,7 +231,7 @@ export async function POST(request: NextRequest) {
                 return new Response('Sale creation failed', { status: 200 });
             }
             sale = newSale;
-            console.log(`✅ SeQura: Nueva venta creada ${sale.id}`);
+            console.log(`✅ SeQura IPN: Nueva venta creada ${sale.id} → paid`);
         }
 
         // 4. Sincronizar cuotas con installments (igual que Stripe/Hotmart)

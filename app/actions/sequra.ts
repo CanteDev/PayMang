@@ -179,106 +179,20 @@ export async function initiateSequraPayment(linkId: string) {
             return { success: false, error: 'SeQura no devolvió referencia de pedido' };
         }
 
-        // 8. Buscar la venta a actualizar con el orderRef de SeQura
-        // PRIORIDAD 1: usar target_sale_id del metadata del link (igual que Hotmart)
-        //   → es el ID exacto de la venta manual ya registrada para este cobro
-        // PRIORIDAD 2: fallback por student_id + pack_id + status pending/partial
-        // IMPORTANTE: usar serviceClient (sin RLS) porque el checkout es ruta pública sin sesión.
+        // 8. Guardar el orderRef de SeQura en el payment_link para que el IPN lo correlacione.
+        // NO creamos ni modificamos ventas aquí — exactamente igual que Hotmart/Stripe.
+        // La venta se crea/actualiza SOLO cuando el IPN webhook confirma el pago.
+        // Esto elimina completamente los duplicados al abrir el checkout.
         const serviceClient = createServiceClient() as any;
-
-        const targetSaleId = (paymentLink as any).metadata?.target_sale_id;
-        let existingSale: any = null;
-
-        if (targetSaleId) {
-            const { data } = await serviceClient
-                .from('sales')
-                .select('id, gateway, status')
-                .eq('id', targetSaleId)
-                .in('status', ['pending', 'partial'])
-                .maybeSingle();
-            existingSale = data;
-            if (existingSale) {
-                console.log(`SeQura: usando target_sale_id=${targetSaleId} del link metadata`);
-            }
-        }
-
-        if (!existingSale) {
-            // Fallback: búsqueda por student + pack (para links sin target_sale_id)
-            const { data } = await serviceClient
-                .from('sales')
-                .select('id, gateway, status')
-                .eq('student_id', paymentLink.student.id)
-                .eq('pack_id', paymentLink.pack.id)
-                .in('status', ['pending', 'partial'])
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-            existingSale = data;
-        }
-
-        let sale: any = null;
-        let saleError: any = null;
-
-        if (existingSale) {
-            // Existe una venta previa → actualizar con la referencia de SeQura
-            // sin crear un duplicado. Cambiamos gateway a 'sequra' para reflejar
-            // que el pago se va a gestionar por SeQura.
-            const { data: updated, error: updateErr } = await serviceClient
-                .from('sales')
-                .update({
-                    gateway: 'sequra',
-                    transaction_id: orderRef,
+        await serviceClient
+            .from('payment_links')
+            .update({
+                metadata: {
+                    ...(paymentLink as any).metadata,
                     sequra_order_ref: orderRef,
-                    total_amount: activePrice,
-                    metadata: {
-                        ...paymentLink.metadata,
-                        pack_offer_id: paymentLink.pack_offer_id,
-                        link_id: linkId,
-                        product_code: null,
-                    },
-                    sequra_payment_status: {
-                        initial_70: false,
-                        second_15: false,
-                        final_15: false,
-                    }
-                } as any)
-                .eq('id', existingSale.id)
-                .select()
-                .single();
-            sale = updated;
-            saleError = updateErr;
-            if (updateErr) console.error('Error updating existing sale for SeQura:', updateErr);
-        } else {
-            // No existe venta previa → crear nueva
-            const { data: inserted, error: insertErr } = await serviceClient
-                .from('sales')
-                .insert({
-                    student_id: paymentLink.student.id,
-                    pack_id: paymentLink.pack.id,
-                    gateway: 'sequra',
-                    total_amount: activePrice,
-                    amount_collected: 0,
-                    status: 'pending',
-                    transaction_id: orderRef,
-                    sequra_order_ref: orderRef,
-                    metadata: {
-                        ...paymentLink.metadata,
-                        pack_offer_id: paymentLink.pack_offer_id,
-                        link_id: linkId,
-                        product_code: null,
-                    },
-                    sequra_payment_status: {
-                        initial_70: false,
-                        second_15: false,
-                        final_15: false,
-                    }
-                } as any)
-                .select()
-                .single();
-            sale = inserted;
-            saleError = insertErr;
-            if (insertErr) console.error('Error creating SeQura sale after solicitation:', insertErr);
-        }
+                }
+            })
+            .eq('id', linkId);
 
         // 9. Obtener formulario de identificación para mostrarlo al alumno
         // GET /orders/{uuid}/form_v2?product=i1 (i1 = invoicing, pp1 = pago aplazado, etc.)
@@ -293,7 +207,6 @@ export async function initiateSequraPayment(linkId: string) {
             success: true,
             form: formHtml,
             orderRef,
-            saleId: sale?.id || null,
         };
 
     } catch (apiError: any) {
