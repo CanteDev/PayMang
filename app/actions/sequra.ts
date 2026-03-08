@@ -29,7 +29,10 @@ function generateIpnToken(linkId: string): string {
 }
 
 export async function initiateSequraPayment(linkId: string) {
-    const supabase: any = await createClient();
+    // IMPORTANTE: usamos serviceClient en lugar de createClient() porque 
+    // esta función se invoca desde el checkout público donde no hay sesión.
+    // El RLS bloquearía la lectura de la tabla methods/links si usamos el cliente normal.
+    const supabase = createServiceClient() as any;
 
     // 1. Fetch Link Details
     const { data: link, error: linkError } = await supabase
