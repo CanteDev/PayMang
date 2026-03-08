@@ -1,11 +1,22 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { CONFIG } from '@/config/app.config';
 import { startSolicitation, getIdentificationForm } from '@/lib/sequra/client';
 import { PaymentLinkWithRelations } from '@/types/database';
 import { getAppConfig } from '@/lib/config/server-config';
 import { createHash } from 'crypto';
+
+/**
+ * Cliente con service role (bypasa RLS) para operaciones en rutas públicas
+ * donde no hay usuario autenticado (ej. checkout de SeQura).
+ */
+function createServiceClient() {
+    const url = CONFIG.SUPABASE.URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    return createSupabaseClient(url, serviceKey);
+}
 
 /**
  * Genera un token SHA1 para asegurar la llamada IPN de SeQura.
@@ -170,7 +181,9 @@ export async function initiateSequraPayment(linkId: string) {
 
         // 8. Buscar si ya existe una venta para este alumno + pack (ej. añadida manualmente)
         // para evitar duplicados si el alumno ya tenía deuda registrada.
-        const { data: existingSale } = await supabase
+        // IMPORTANTE: usar serviceClient (sin RLS) porque el checkout es ruta pública sin sesión.
+        const serviceClient = createServiceClient() as any;
+        const { data: existingSale } = await serviceClient
             .from('sales')
             .select('id, gateway, status')
             .eq('student_id', paymentLink.student.id)
@@ -187,7 +200,7 @@ export async function initiateSequraPayment(linkId: string) {
             // Existe una venta previa → actualizar con la referencia de SeQura
             // sin crear un duplicado. Cambiamos gateway a 'sequra' para reflejar
             // que el pago se va a gestionar por SeQura.
-            const { data: updated, error: updateErr } = await supabase
+            const { data: updated, error: updateErr } = await serviceClient
                 .from('sales')
                 .update({
                     gateway: 'sequra',
@@ -214,7 +227,7 @@ export async function initiateSequraPayment(linkId: string) {
             if (updateErr) console.error('Error updating existing sale for SeQura:', updateErr);
         } else {
             // No existe venta previa → crear nueva
-            const { data: inserted, error: insertErr } = await supabase
+            const { data: inserted, error: insertErr } = await serviceClient
                 .from('sales')
                 .insert({
                     student_id: paymentLink.student.id,
