@@ -28,9 +28,10 @@ interface StudentPaymentDetailsProps {
         email: string;
     };
     trigger?: React.ReactNode;
+    onUpdate?: () => void;
 }
 
-export default function StudentPaymentDetails({ student, trigger }: StudentPaymentDetailsProps) {
+export default function StudentPaymentDetails({ student, trigger, onUpdate }: StudentPaymentDetailsProps) {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [sales, setSales] = useState<any[]>([]);
@@ -81,6 +82,9 @@ export default function StudentPaymentDetails({ student, trigger }: StudentPayme
     useEffect(() => {
         if (open) {
             loadData();
+        } else {
+            // When modal closes, notify parent to refresh its data
+            if (onUpdate) onUpdate();
         }
     }, [open]);
 

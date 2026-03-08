@@ -7,9 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Copy, CheckCircle2, Send, UserPlus } from 'lucide-react';
+import { Copy, CheckCircle2, Send, UserPlus, Wallet, Search, ChevronDown, X as XIcon } from 'lucide-react';
 import { CONFIG } from '@/config/app.config';
 import StudentForm from '@/components/admin/StudentForm';
+import StudentPaymentDetails from '@/components/admin/StudentPaymentDetails';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface Student {
     id: string;
@@ -61,6 +63,10 @@ export default function UnifiedLinkGenerator() {
     const [selectedOffer, setSelectedOffer] = useState<string>('');
     const [selectedCloser, setSelectedCloser] = useState<string>('');
     const [selectedSetter, setSelectedSetter] = useState<string>('');
+
+    // Student search popover
+    const [studentPopoverOpen, setStudentPopoverOpen] = useState(false);
+    const [studentSearch, setStudentSearch] = useState('');
 
     // Commission Rates Override
     const [globalRates, setGlobalRates] = useState<{closer: number, coach: number, setter: number} | null>(null);
@@ -181,23 +187,23 @@ export default function UnifiedLinkGenerator() {
     // Added: Load student's sales to filter packs
     const [studentSales, setStudentSales] = useState<any[]>([]);
 
+    const fetchStudentSales = async () => {
+        if (!selectedStudent) {
+            setStudentSales([]);
+            return;
+        }
+
+        const { data } = await supabase
+            .from('sales')
+            .select('id, pack_id, total_amount, amount_collected')
+            .eq('student_id', selectedStudent);
+
+        if (data) {
+            setStudentSales(data);
+        }
+    };
+
     useEffect(() => {
-        const fetchStudentSales = async () => {
-            if (!selectedStudent) {
-                setStudentSales([]);
-                return;
-            }
-
-            const { data } = await supabase
-                .from('sales')
-                .select('id, pack_id, total_amount, amount_collected')
-                .eq('student_id', selectedStudent);
-
-            if (data) {
-                setStudentSales(data);
-            }
-        };
-
         fetchStudentSales();
     }, [selectedStudent, supabase]);
 
@@ -485,24 +491,89 @@ export default function UnifiedLinkGenerator() {
                 <div className="space-y-2">
                     <Label htmlFor="student">Estudiante *</Label>
                     <div className="flex gap-2">
-                        <select
-                            id="student"
-                            value={selectedStudent}
-                            onChange={(e) => setSelectedStudent(e.target.value)}
-                            className="w-full h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm"
-                            disabled={loading}
-                        >
-                            <option value="">Seleccionar estudiante...</option>
-                            {students.map(student => (
-                                <option key={student.id} value={student.id}>
-                                    {student.email} - {student.full_name}
-                                </option>
-                            ))}
-                        </select>
+                        {/* Searchable student picker */}
+                        <Popover open={studentPopoverOpen} onOpenChange={setStudentPopoverOpen}>
+                            <PopoverTrigger asChild>
+                                <button
+                                    id="student"
+                                    type="button"
+                                    disabled={loading}
+                                    className="w-full flex items-center justify-between gap-2 h-10 px-3 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                >
+                                    {selectedStudent ? (
+                                        <span className="truncate text-left font-medium text-gray-800">
+                                            {(() => {
+                                                const s = students.find(st => st.id === selectedStudent);
+                                                return s ? `${s.full_name} (${s.email})` : 'Seleccionar estudiante...';
+                                            })()}
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-400">Seleccionar estudiante...</span>
+                                    )}
+                                    <span className="flex items-center gap-1 shrink-0">
+                                        {selectedStudent && (
+                                            <span
+                                                role="button"
+                                                onClick={(e) => { e.stopPropagation(); setSelectedStudent(''); setStudentSearch(''); }}
+                                                className="p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
+                                            >
+                                                <XIcon className="w-3 h-3" />
+                                            </span>
+                                        )}
+                                        <ChevronDown className="w-4 h-4 text-gray-400" />
+                                    </span>
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="p-0 w-[420px] max-h-80 flex flex-col" align="start" sideOffset={4}>
+                                <div className="p-2 border-b flex items-center gap-2">
+                                    <Search className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                    <input
+                                        autoFocus
+                                        placeholder="Buscar por nombre o email..."
+                                        value={studentSearch}
+                                        onChange={e => setStudentSearch(e.target.value)}
+                                        className="flex-1 text-sm outline-none bg-transparent placeholder-gray-400"
+                                    />
+                                    {studentSearch && (
+                                        <button onClick={() => setStudentSearch('')} className="text-gray-400 hover:text-gray-600">
+                                            <XIcon className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
+                                    {students
+                                        .filter(s => {
+                                            const q = studentSearch.toLowerCase();
+                                            return !q || s.full_name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q);
+                                        })
+                                        .slice(0, 50)
+                                        .map(student => (
+                                            <button
+                                                key={student.id}
+                                                type="button"
+                                                onClick={() => { setSelectedStudent(student.id); setStudentPopoverOpen(false); setStudentSearch(''); }}
+                                                className={`w-full flex flex-col items-start px-3 py-2 text-left transition-colors hover:bg-gray-50 border-l-2 ${
+                                                    selectedStudent === student.id ? 'bg-blue-50 border-l-blue-500' : 'border-l-transparent'
+                                                }`}
+                                            >
+                                                <span className="text-sm font-medium text-gray-800 truncate w-full">{student.full_name}</span>
+                                                <span className="text-xs text-gray-400 truncate w-full">{student.email}</span>
+                                            </button>
+                                        ))
+                                    }
+                                    {students.filter(s => {
+                                        const q = studentSearch.toLowerCase();
+                                        return !q || s.full_name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q);
+                                    }).length === 0 && (
+                                        <p className="text-center text-sm text-gray-400 py-6">Sin resultados</p>
+                                    )}
+                                </div>
+                            </PopoverContent>
+                        </Popover>
                         <StudentForm
                             onSuccess={(newStudent) => {
                                 if (newStudent) {
-                                    setStudents(prev => [...prev, newStudent].sort((a, b) => a.email.localeCompare(b.email)));
+                                    setStudents(prev => [...prev, newStudent].sort((a, b) => a.full_name.localeCompare(b.full_name)));
                                     setSelectedStudent(newStudent.id);
                                 }
                             }}
@@ -536,10 +607,30 @@ export default function UnifiedLinkGenerator() {
                             );
                         })}
                     </select>
-                    {selectedStudent && visiblePacks.length === 0 && (
-                        <p className="text-xs text-orange-600">
-                            Este estudiante no tiene packs con deuda pendiente.
-                        </p>
+                    {selectedStudent && (
+                        <div className="flex items-center justify-between mt-1">
+                            {visiblePacks.length === 0 ? (
+                                <p className="text-xs text-orange-600">
+                                    Este estudiante no tiene packs con deuda pendiente.
+                                </p>
+                            ) : (
+                                <div></div>
+                            )}
+                            <StudentPaymentDetails
+                                student={{
+                                    id: selectedStudent,
+                                    email: students.find(s => s.id === selectedStudent)?.email || '',
+                                    full_name: students.find(s => s.id === selectedStudent)?.full_name || ''
+                                }}
+                                onUpdate={fetchStudentSales}
+                                trigger={
+                                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs flex items-center gap-1.5 border-primary text-primary hover:bg-primary/5 px-2">
+                                        <Wallet className="w-3.5 h-3.5" />
+                                        Añadir Pack (Finanzas)
+                                    </Button>
+                                }
+                            />
+                        </div>
                     )}
                 </div>
 
