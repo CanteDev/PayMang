@@ -103,10 +103,12 @@ export async function GET(request: NextRequest) {
             console.log(`📋 Procesando disbursement ${disbRef} con ${settlements.length} settlements`);
 
             for (const settlement of settlements) {
+                const orderRef = settlement?.order_ref; // UUID de SeQura (nuestro transaction_id)
                 const orderRef1 = settlement?.order_ref_1; // Este es nuestro link_id
                 const amountCents = settlement?.amount_with_tax; // En céntimos
 
-                if (!orderRef1 || !amountCents || amountCents <= 0) {
+                // Si no hay orderRef (UUID) o importe es nulo/0, saltar
+                if (!orderRef || !amountCents || amountCents <= 0) {
                     // Importe 0 = cancelada antes del desembolso, se ignora
                     continue;
                 }
@@ -114,15 +116,15 @@ export async function GET(request: NextRequest) {
                 const amountEuros = parseFloat((amountCents / 100).toFixed(2));
 
                 try {
-                    // Buscar la venta vinculada con este link/orden
+                    // Buscar la venta vinculada con el UUID de SeQura
                     const { data: sale } = await (supabase.from('sales') as any)
                         .select('id, student_id, amount_collected')
-                        .eq('transaction_id', orderRef1)
+                        .eq('transaction_id', orderRef)
                         .eq('gateway', 'sequra')
                         .maybeSingle();
 
                     if (!sale) {
-                        console.warn(`⚠️ Venta no encontrada para order_ref_1: ${orderRef1}. Posiblemente aún no procesada por IPN.`);
+                        console.warn(`⚠️ Venta no encontrada para order_ref (UUID SeQura): ${orderRef} (link: ${orderRef1}). Posiblemente aún no procesada por IPN.`);
                         errorCount++;
                         continue;
                     }
