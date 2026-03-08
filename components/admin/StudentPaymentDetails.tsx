@@ -82,11 +82,16 @@ export default function StudentPaymentDetails({ student, trigger, onUpdate }: St
     useEffect(() => {
         if (open) {
             loadData();
-        } else {
-            // When modal closes, notify parent to refresh its data
-            if (onUpdate) onUpdate();
         }
     }, [open]);
+
+    const handleOpenChange = (newOpen: boolean) => {
+        setOpen(newOpen);
+        // Cuando se cierra el modal, notificamos al componente padre
+        if (!newOpen && onUpdate) {
+            onUpdate();
+        }
+    };
 
     const loadData = async () => {
         setLoading(true);
@@ -370,7 +375,7 @@ export default function StudentPaymentDetails({ student, trigger, onUpdate }: St
     const globalProgress = globalTotalAgreed > 0 ? Math.round((globalTotalPaid / globalTotalAgreed) * 100) : 0;
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
                 {trigger || (
                     <Button variant="outline" size="sm">
