@@ -95,12 +95,13 @@ export default function UnifiedLinkGenerator() {
 
     const loadData = async () => {
         try {
-            // Cargar estudiantes
+            // Cargar estudiantes (últimos 100 añadidos para que salgan los nuevos rápido)
             const { data: studentsData } = await supabase
                 .from('students')
                 .select('*')
                 .eq('status', 'active')
-                .order('email');
+                .order('created_at', { ascending: false })
+                .limit(100);
             if (studentsData) setStudents(studentsData);
 
             // Cargar packs y sus ofertas
@@ -183,6 +184,46 @@ export default function UnifiedLinkGenerator() {
             prevSelectedStudentRef.current = '';
         }
     }, [selectedStudent, students, coaches]);
+
+    // Búsqueda asíncrona de estudiantes en BD
+    useEffect(() => {
+        const searchStudentsAsync = async () => {
+            if (!studentSearch || studentSearch.length < 2) return;
+            
+            try {
+                const searchTerm = `%${studentSearch}%`;
+                const { data, error } = await supabase
+                    .from('students')
+                    .select('*')
+                    .eq('status', 'active')
+                    .or(`full_name.ilike.${searchTerm},email.ilike.${searchTerm}`)
+                    .order('full_name', { ascending: true }) // Cuando buscas, mejor ordenar por nombre
+                    .limit(50);
+                    
+                if (error) throw error;
+
+                if (data) {
+                    setStudents(prev => {
+                        const newStudentsList = [...data] as Student[];
+                        // Importante: Si ya hay un estudiante seleccionado, no queremos que desaparezca 
+                        // de la memoria si la búsqueda no lo incluye
+                        if (selectedStudent) {
+                            const currentlySelected = prev.find(s => s.id === selectedStudent);
+                            if (currentlySelected && !newStudentsList.some(s => s.id === selectedStudent)) {
+                                newStudentsList.push(currentlySelected);
+                            }
+                        }
+                        return newStudentsList;
+                    });
+                }
+            } catch (err) {
+                console.error("Error buscando estudiantes:", err);
+            }
+        };
+
+        const timeoutId = setTimeout(searchStudentsAsync, 300); // Debounce de 300ms
+        return () => clearTimeout(timeoutId);
+    }, [studentSearch, selectedStudent, supabase]);
 
     // Added: Load student's sales to filter packs
     const [studentSales, setStudentSales] = useState<any[]>([]);
@@ -554,10 +595,6 @@ export default function UnifiedLinkGenerator() {
                                 </div>
                                 <div className="overflow-y-auto flex-1 divide-y divide-gray-100">
                                     {students
-                                        .filter(s => {
-                                            const q = studentSearch.toLowerCase();
-                                            return !q || s.full_name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q);
-                                        })
                                         .slice(0, 50)
                                         .map(student => (
                                             <button

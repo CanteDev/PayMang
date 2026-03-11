@@ -44,6 +44,11 @@ export default function AdminStudentsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Pagination
+    const [page, setPage] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+    const ITEMS_PER_PAGE = 50;
+
     // Filters
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedMonth, setSelectedMonth] = useState<string>('all');
@@ -59,7 +64,16 @@ export default function AdminStudentsPage() {
 
     useEffect(() => {
         loadStudents();
-    }, [selectedMonth, statusFilter, coachFilter]);
+    }, [selectedMonth, statusFilter, coachFilter, page]); // Add page dependency
+
+    // Búsqueda asíncrona tipo debounce para Alumnos
+    useEffect(() => {
+        const timeoutId = setTimeout(() => {
+            setPage(1); // Reset a page 1 al buscar
+            loadStudents();
+        }, 500);
+        return () => clearTimeout(timeoutId);
+    }, [searchTerm]);
 
     const loadCoaches = async () => {
         const { data } = await supabase
@@ -82,7 +96,7 @@ export default function AdminStudentsPage() {
                     coach:profiles!assigned_coach_id(full_name),
                     payments(amount, status, due_date),
                     sales(total_amount, status, gateway, amount_collected)
-                `)
+                `, { count: 'exact' })
                 .order('created_at', { ascending: false });
 
             // Date Filter (Registration Month)
@@ -112,10 +126,23 @@ export default function AdminStudentsPage() {
                 }
             }
 
-            const { data, error: fetchError } = await query;
+            // Search Filter
+            if (searchTerm) {
+                const searchLower = `%${searchTerm.toLowerCase()}%`;
+                query = query.or(`full_name.ilike.${searchLower},email.ilike.${searchLower}`);
+            }
+
+            // Paginación
+            const from = (page - 1) * ITEMS_PER_PAGE;
+            const to = from + ITEMS_PER_PAGE - 1;
+            query = query.range(from, to);
+
+            // Fetch data with count to know total pages
+            const { data, count, error: fetchError } = await query;
 
             if (fetchError) throw fetchError;
             setStudents(data as any || []);
+            if (count !== null) setTotalItems(count);
         } catch (err: any) {
             console.error('Error loading students:', err);
             setError(err.message || 'Error al cargar alumnos');
@@ -124,13 +151,10 @@ export default function AdminStudentsPage() {
         }
     };
 
-    // Client-side search and moroso filter
-    const filteredStudents = students.filter(student => {
-        const matchesSearch = (
-            student.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            student.email?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+    const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
 
+    // Client-side computations for Moroso filter (since it depends on complex relation logic)
+    const filteredStudents = students.filter(student => {
         // +1 day grace: only overdue if due_date < yesterday (start of day)
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
@@ -152,7 +176,7 @@ export default function AdminStudentsPage() {
         );
 
         if (morosoFilter && !isOverdue) return false;
-        return matchesSearch;
+        return true;
     });
 
     const getPaymentProgress = (student: Student) => {
@@ -428,6 +452,35 @@ export default function AdminStudentsPage() {
                                     )}
                                 </TableBody>
                             </Table>
+                        </div>
+                    )}
+                    
+                    {!loading && totalPages > 1 && (
+                        <div className="mt-4 flex flex-col md:flex-row items-center justify-between border-t pt-4">
+                            <span className="text-sm text-gray-500 mb-4 md:mb-0">
+                                Mostrando {((page - 1) * ITEMS_PER_PAGE) + 1} a {Math.min(page * ITEMS_PER_PAGE, totalItems)} de {totalItems} alumnos
+                            </span>
+                            <div className="flex justify-end gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    disabled={page === 1}
+                                >
+                                    Anterior
+                                </Button>
+                                <div className="flex items-center px-4 text-sm text-gray-600">
+                                    Página {page} de {totalPages}
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={page === totalPages}
+                                >
+                                    Siguiente
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </CardContent>
