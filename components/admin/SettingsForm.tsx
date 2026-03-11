@@ -186,7 +186,7 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                 </Button>
                             </div>
                         </div>
-                        <div className="border-t pt-6">
+                        {/* <div className="border-t pt-6">
                             <h3 className="text-lg font-medium mb-4">SeQura</h3>
                             <div className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -228,7 +228,7 @@ export default function SettingsForm({ settings }: SettingsFormProps) {
                                     {loading === 'sequra_milestones' ? 'Guardando...' : 'Guardar Hitos'}
                                 </Button>
                             </div>
-                        </div>
+                        </div> */}
                     </CardContent>
                 </Card>
             </div>
